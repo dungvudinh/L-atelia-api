@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-const createProject = async (req, res) => {
+const createProject = async (req, res,next) => {
     try {
       console.log('tesst')
       const project = await projectService.createProject(req.body);
@@ -10,9 +10,8 @@ const createProject = async (req, res) => {
         next(err)
     }
 };
-const getAllProjects = async (req, res) => {
+const getAllProjects = async (req, res, next) => {
     try {
-      console.log('test')
       const projects = await projectService.getAllProjects();
       res.status(StatusCodes.OK).json({success:true, data:projects})
     } catch (err) {
@@ -20,7 +19,7 @@ const getAllProjects = async (req, res) => {
     }
   };
   
-  const getProjectById = async (req, res) => {
+  const getProjectById = async (req, res, next) => {
     try {
       const project = await projectService.getProjectById(req.params.id);
       if (!project) res.status(StatusCodes.NOT_FOUND).json({success:false, msg:'Project not found'})
@@ -30,7 +29,7 @@ const getAllProjects = async (req, res) => {
     }
   };
   
-  const updateProject = async (req, res) => {
+  const updateProject = async (req, res, next) => {
     try {
       const project = await projectService.updateProject(req.params.id, req.body);
       if (!project) res.status(StatusCodes.NOT_FOUND).json({success:false, msg:'Project not found'})
@@ -40,7 +39,7 @@ const getAllProjects = async (req, res) => {
     }
   };
   
-  const deleteProject = async (req, res) => {
+  const deleteProject = async (req, res, next) => {
     try {
       const project = await projectService.deleteProject(req.params.id);
       if (!project) res.status(StatusCodes.NOT_FOUND).json({success:false, msg:'Project not found'})

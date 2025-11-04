@@ -13,13 +13,14 @@ const START_SERVER = () => {
     // 1. Parse body before any route
     app.use(cookieParser())
     app.use(cors({
-        origin: function(origin, callback){
-            if (!origin || allowOrigins.includes(origin)) {
-                callback(null, true);
-              } else {
-                callback(new Error("Not allowed by CORS"));
-              }
-        },
+        origin: true,
+        // origin: function(origin, callback){
+        //     if (!origin || allowOrigins.includes(origin)) {
+        //         callback(null, true);
+        //       } else {
+        //         callback(new Error("Not allowed by CORS"));
+        //       }
+        // },
         credentials: true,               // Cho phép gửi cookie, authorization header, etc.
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allow OPTIONS
         allowedHeaders: ['Content-Type', 'Authorization'], 
@@ -29,7 +30,7 @@ const START_SERVER = () => {
     app.use(express.urlencoded({ extended: true }))
 
     // 2. Then use your routes
-    app.use('/v1', APIs_V1)
+    app.get('/v1', ()=>console.log('test'))
     app.use((err, req, res, next) => {
         const status = err.statusCode || 500;
         const message = err.message || 'Internal Server Error';
