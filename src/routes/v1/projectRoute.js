@@ -1,6 +1,5 @@
 import express from "express";
 import { projectController } from "../../controllers/projectController";
-import { projectValidation } from "~/validations/projectValidation.js";
 const validate = require('../../middlewares/validate');
 const { createProjectSchema } = require('../../validations/projectValidation');
 // import upload from '~/middlewares/upload'

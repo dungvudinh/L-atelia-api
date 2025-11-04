@@ -1,8 +1,8 @@
 import { StatusCodes } from "http-status-codes";
 const createProject = async (req, res,next) => {
     try {
-      console.log('tesst')
       const project = await projectService.createProject(req.body);
+      console.log(project)
       res.status(StatusCodes.CREATED).json({msg:'Create project successfully'})
 
     } catch (err) {

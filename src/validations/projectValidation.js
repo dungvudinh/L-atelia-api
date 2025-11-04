@@ -1,5 +1,6 @@
-const Joi = require('joi');
-
+import Joi from "joi";
+import ApiError from '~/utils/apiError';
+import { StatusCodes } from "http-status-codes";
 const createProjectSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
@@ -27,4 +28,4 @@ const createProjectSchema = Joi.object({
   }))
 });
 
-module.exports = { createProjectSchema };
+export default {createProjectSchema};
