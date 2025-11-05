@@ -5,7 +5,7 @@
 // import APIs_V1 from './routes/v1/index.js';
 // import cookieParser from 'cookie-parser';
 // import helmet from 'helmet'
-const epxress = require('express');
+const express = require('express');
 const {CONNECT_DB, GET_DB, CLOSE_DB} = require('./config/mongodb.js');
 const AsyncExitHook  = require('async-exit-hook');
 const {env} = require('./config/environment.js');

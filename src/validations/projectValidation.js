@@ -31,4 +31,4 @@ const createProjectSchema = Joi.object({
   }))
 });
 
-export default {createProjectSchema};
+module.exports = {createProjectSchema};

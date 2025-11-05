@@ -1,6 +1,6 @@
 const express = require('express');
 const {projectController} = require('../../controllers/projectController.js');
-const validate = require('../../validations/projectValidation.js');
+const validate = require('../../middlewares/validate.js');
 const { createProjectSchema } = require('../../validations/projectValidation.js');
 // import express from "express";
 // import { projectController } from "../../controllers/projectController.js";
@@ -18,4 +18,4 @@ Router.get('/:id', projectController.getProjectById);
 Router.put('/:id', validate(createProjectSchema), projectController.updateProject);
 Router.delete('/:id', projectController.deleteProject);
 
-export default Router;
+module.exports = Router;
