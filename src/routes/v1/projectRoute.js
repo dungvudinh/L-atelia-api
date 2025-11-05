@@ -1,10 +1,14 @@
-import express from "express";
-import { projectController } from "../../controllers/projectController.js";
-import validate from "../../middlewares/validate.js";
-// const validate = require('../../middlewares/validate.js');
-// const { createProjectSchema } = require('../../validations/projectValidation.js');
-import {createProjectSchema} from '../../validations/projectValidation.js'
-// import upload from '~/middlewares/upload'
+const express = require('express');
+const {projectController} = require('../../controllers/projectController.js');
+const validate = require('../../validations/projectValidation.js');
+const { createProjectSchema } = require('../../validations/projectValidation.js');
+// import express from "express";
+// import { projectController } from "../../controllers/projectController.js";
+// import validate from "../../middlewares/validate.js";
+// // const validate = require('../../middlewares/validate.js');
+// // const { createProjectSchema } = require('../../validations/projectValidation.js');
+// import {createProjectSchema} from '../../validations/projectValidation.js'
+// // import upload from '~/middlewares/upload'
 
 const Router = express.Router({mergeParams:true});
 

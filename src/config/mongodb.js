@@ -1,5 +1,7 @@
-import { MongoClient,ServerApiVersion } from "mongodb";
-import { env } from "./environment.js";
+// import { MongoClient,ServerApiVersion } from "mongodb";
+// import { env } from "./environment.js";
+const {MongoClient, ServerApiVersion} = require('mongodb');
+const {env} = require('./environment.js')
 //dunggdev:AY1lqYnMthLWFNZU
 
 let lacVietStudioInstance = null;

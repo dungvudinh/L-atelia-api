@@ -1,6 +1,9 @@
-import Joi from "joi";
-import ApiError from '~/utils/apiError.js';
-import { StatusCodes } from "http-status-codes";
+// import Joi from "joi";
+// import ApiError from '~/utils/apiError.js';
+// import { StatusCodes } from "http-status-codes";
+const Joi = require('joi');
+const ApiError = require('../utils/apiError.js');
+const {StatusCodes} = require('http-status-codes');
 const createProjectSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
