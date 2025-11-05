@@ -1,5 +1,5 @@
 import express from "express";
-import projectRoute from './projectRoute'
+import projectRoute from './projectRoute.js'
 const Router = express.Router();
 Router.use('/projects', projectRoute)
 

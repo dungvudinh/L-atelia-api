@@ -1,7 +1,7 @@
 import express from 'express';
-import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb';
+import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
 import AsyncExitHook from 'async-exit-hook';
-import { env } from './config/environment';
+import { env } from './config/environment.js';
 import APIs_V1 from './routes/v1/index.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet'

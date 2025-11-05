@@ -1,5 +1,5 @@
 import Joi from "joi";
-import ApiError from '~/utils/apiError';
+import ApiError from '~/utils/apiError.js';
 import { StatusCodes } from "http-status-codes";
 const createProjectSchema = Joi.object({
   title: Joi.string().required(),

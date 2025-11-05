@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { GET_DB } from "../config/mongodb";
+import { GET_DB } from "../config/mongodb.js";
 
 const FEATURE_SECTION_COLLECTION_NAME='featureSection'; 
 const FEATURE_SECTION_COLLECTION_SCHEMA = Joi.object({
