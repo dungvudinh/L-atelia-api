@@ -4,9 +4,12 @@ import AsyncExitHook from 'async-exit-hook';
 import { env } from './config/environment';
 import APIs_V1 from './routes/v1/index.js';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet'
 const app = express();
 const START_SERVER = ()=>
-{
+    {app.use(helmet({
+    contentSecurityPolicy: false,
+    }));
     app.use(cookieParser());
     app.use(express.json());
     app.use(express.urlencoded({extended:true}));
