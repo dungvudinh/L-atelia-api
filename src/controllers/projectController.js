@@ -1,5 +1,5 @@
-// import { StatusCodes } from "http-status-codes";
-const StatusCodes = require('http-status-codes')
+import { StatusCodes } from "http-status-codes";
+// const StatusCodes = require('http-status-codes')
 const createProject = async (req, res,next) => {
     try {
       const project = await projectService.createProject(req.body);

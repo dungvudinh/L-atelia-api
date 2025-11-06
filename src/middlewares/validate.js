@@ -10,5 +10,5 @@ const validate = (schema) => {
       next();
     };
   };
-  
-module.exports = validate;
+export default validate;
+// module.exports = validate;

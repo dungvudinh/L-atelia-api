@@ -1,5 +1,5 @@
-// import dotenv from 'dotenv'
-const dotenv = require('dotenv')
+import dotenv from 'dotenv'
+// const dotenv = require('dotenv')
 dotenv.config()
 export const env = {
     MONGODB_URI: process.env.MONGODB_URI,

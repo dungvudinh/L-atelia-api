@@ -1,7 +1,7 @@
-// import Joi from "joi";
-// import { GET_DB } from "../config/mongodb.js";
-const Joi = require('joi');
-const  {GET_DB} = require('../config/mongodb.js');
+import Joi from "joi";
+import { GET_DB } from "../config/mongodb.js";
+// const Joi = require('joi');
+// const  {GET_DB} = require('../config/mongodb.js');
 const FEATURE_SECTION_COLLECTION_NAME='featureSection'; 
 const FEATURE_SECTION_COLLECTION_SCHEMA = Joi.object({
     id: Joi.string().optional(),
@@ -42,7 +42,31 @@ const validation = async (projectData)=>
 {
     return await PROJECT_COLLECTION_SCHEMA.validateAsync(projectData, {abortEarly:false, stripUnknown:true})
 }
-export const projectModel = {
+const create = async (data)=>
+{
+  try 
+  {
+
+  }
+  catch(error)
+  {
+    throw error;
+  }
+}
+const getProjects = async ()=>
+{
+  try 
+  {
+
+  }
+  catch(error)
+  {
+    throw error
+  }
+}
+export default  {
     PROJECT_COLLECTION_NAME, 
-    PROJECT_COLLECTION_SCHEMA
+    PROJECT_COLLECTION_SCHEMA, 
+    create, 
+    getProjects
 }

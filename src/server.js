@@ -1,17 +1,17 @@
-// import express from 'express';
-// import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
-// import AsyncExitHook from 'async-exit-hook';
-// import { env } from './config/environment.js';
-// import APIs_V1 from './routes/v1/index.js';
-// import cookieParser from 'cookie-parser';
-// import helmet from 'helmet'
-const express = require('express');
-const {CONNECT_DB, GET_DB, CLOSE_DB} = require('./config/mongodb.js');
-const AsyncExitHook  = require('async-exit-hook');
-const {env} = require('./config/environment.js');
-const APIs_V1 = require('./routes/v1/index.js');
-const cookieParser = require('cookie-parser');
-const  helmet = require('helmet');
+import express from 'express';
+import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
+import AsyncExitHook from 'async-exit-hook';
+import { env } from './config/environment.js';
+import APIs_V1 from './routes/v1/index.js';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet'
+// const express = require('express');
+// const {CONNECT_DB, GET_DB, CLOSE_DB} = require('./config/mongodb.js');
+// const AsyncExitHook  = require('async-exit-hook');
+// const {env} = require('./config/environment.js');
+// const APIs_V1 = require('./routes/v1/index.js');
+// const cookieParser = require('cookie-parser');
+// const  helmet = require('helmet');
 const app = express();
 const START_SERVER = ()=>
     {app.use(helmet({
