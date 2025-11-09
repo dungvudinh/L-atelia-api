@@ -1,27 +1,67 @@
-import { MongoClient,ServerApiVersion } from "mongodb";
-import { env } from "./environment.js";
-// const {MongoClient, ServerApiVersion} = require('mongodb');
-// const {env} = require('./environment.js')
-//dunggdev:AY1lqYnMthLWFNZU
+// configs/mongoose.js
+import mongoose from 'mongoose';
+import { env } from './environment.js';
 
-let lacVietStudioInstance = null;
-const mongoClientInstance = new MongoClient(env.MONGODB_URI, {
-    serverApi:{
-        version:ServerApiVersion.v1,
-        strict:true, 
-        deprecationErrors:true
+let isConnected = false;
+
+const CONNECT_DB = async () => {
+  try {
+    if (isConnected) {
+      console.log('✅ MongoDB already connected');
+      return;
     }
-})
 
-export const CONNECT_DB = async () =>{
-    await mongoClientInstance.connect();
-    lacVietStudioInstance = mongoClientInstance.db(env.DATABASE_NAME);
-}
-export const GET_DB = ()=>{
-    if(!lacVietStudioInstance) throw new Error('Must connect to Database first');
-    return lacVietStudioInstance;
-}
+    await mongoose.connect(env.MONGODB_URI, {
+      dbName: env.DATABASE_NAME,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      bufferCommands: false,
+    });
+    
+    isConnected = true;
+    console.log('✅ MongoDB connected via Mongoose');
+    
+    // Event listeners để theo dõi trạng thái kết nối
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+      isConnected = false;
+    });
 
-export const CLOSE_DB = async ()=>{
-    await mongoClientInstance.close();
-}
+    mongoose.connection.on('disconnected', () => {
+      console.log('⚠️ MongoDB disconnected');
+      isConnected = false;
+    });
+
+    mongoose.connection.on('connected', () => {
+      console.log('✅ MongoDB reconnected');
+      isConnected = true;
+    });
+
+  } catch (error) {
+    console.error('❌ Mongoose connection error:', error);
+    process.exit(1);
+  }
+};
+
+const CLOSE_DB = async () => {
+  try {
+    if (mongoose.connection.readyState !== 0) { // 0 = disconnected
+      await mongoose.connection.close();
+      console.log('📀 MongoDB connection closed gracefully');
+      isConnected = false;
+    }
+  } catch (error) {
+    console.error('❌ Error closing MongoDB connection:', error);
+    throw error;
+  }
+};
+
+const GET_DB = () => {
+  if (!isConnected) {
+    throw new Error('❌ Database not connected. Call CONNECT_DB first.');
+  }
+  return mongoose.connection.db;
+};
+
+// Export cả mongoose connection để sử dụng trực tiếp nếu cần
+export { CONNECT_DB, CLOSE_DB, GET_DB, mongoose };
