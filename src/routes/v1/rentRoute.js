@@ -11,8 +11,8 @@ import {
   setFeaturedImage,
   updateRentalStatus,
   toggleFeatured
-} from '../controllers/rentController.js';
-import { uploadRentImages, handleMulterError } from '../middleware/uploadMiddleware.js';
+} from '../../controllers/rentController.js';
+import { uploadRentArray, handleMulterError } from '../../config/multer.js';
 
 const router = express.Router();
 
@@ -32,7 +32,7 @@ router.put('/:id', updateRental);
 router.delete('/:id', deleteRental);
 
 // UPLOAD RENTAL IMAGES
-router.post('/:id/upload', uploadRentImages, handleMulterError, uploadRentalImages);
+router.post('/:id/upload', uploadRentArray, handleMulterError, uploadRentalImages);
 
 // DELETE RENTAL IMAGE
 router.delete('/:id/images/:imageId', deleteRentalImage);

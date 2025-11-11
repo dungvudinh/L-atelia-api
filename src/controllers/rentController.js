@@ -1,6 +1,6 @@
 // controllers/rentController.js
 import rentService from '../services/rentService.js';
-import { deleteFile } from '../middleware/uploadMiddleware.js';
+import { deleteFile } from '../config/multer.js';
 
 export const getAllRentals = async (req, res) => {
   try {

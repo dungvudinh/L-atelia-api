@@ -8,9 +8,9 @@ import helmet from 'helmet';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
+import initializeDatabase from './scripts/initialDatabase.js';
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// const __dirname = path.dirname(__filename);
 
 const allowOrigins = ['http://localhost:5173'];
 const app = express();
@@ -106,6 +106,7 @@ const START_SERVER = () => {
     try {
         console.log('Connecting to Database');
         await CONNECT_DB();
+        await initializeDatabase();
         console.log('Connected to Database');
         START_SERVER();
     } catch (err) {

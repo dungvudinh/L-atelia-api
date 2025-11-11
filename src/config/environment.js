@@ -23,5 +23,6 @@ export const env = {
     DEV_FRONT_URL: process.env.DEV_FRONT_URL, 
     PROD_FRONT_URL: process.env.PROD_FRONT_URL,
     DEV_BACK_URL: process.env.DEV_BACK_URL, 
-    PROD_BACK_URL: process.env.PROD_BACK_URL
+    PROD_BACK_URL: process.env.PROD_BACK_URL, 
+    
 }
