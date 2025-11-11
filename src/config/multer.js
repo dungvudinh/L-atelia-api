@@ -1,4 +1,3 @@
-// configs/multer.js
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -6,16 +5,15 @@ import fs from 'fs';
 // Ensure upload directories exist
 const ensureUploadDirs = () => {
   const uploadDirs = [
+    'uploads/rent', 
+    'uploads/folders',
+    'uploads/media', // THÊM THƯ MỤC MEDIA
     'uploads/projects/hero',
     'uploads/projects/gallery',
     'uploads/projects/floorplans',
     'uploads/projects/progress',
     'uploads/projects/design',
-    'uploads/projects/brochures',
-    'uploads/media/images',
-    'uploads/media/videos',
-    'uploads/media/documents',
-    'uploads/media/audio'
+    'uploads/projects/brochures'
   ];
 
   uploadDirs.forEach(dir => {
@@ -28,6 +26,85 @@ const ensureUploadDirs = () => {
 
 // Gọi hàm này ngay khi khởi động
 ensureUploadDirs();
+
+// ==================== MEDIA STORAGE (FEATURED IMAGE) ====================
+const mediaStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    ensureUploadDirs();
+    const mediaPath = 'uploads/media';
+    console.log(`📁 Saving media image to: ${mediaPath}`);
+    cb(null, mediaPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const safeName = path.parse(file.originalname).name
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .toLowerCase();
+    const filename = `featured-${safeName}-${uniqueSuffix}${ext}`;
+    
+    console.log(`💾 Media image saved as: ${filename}`);
+    cb(null, filename);
+  }
+});
+// ==================== RENT STORAGE ====================
+const rentStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    ensureUploadDirs();
+    const rentPath = 'uploads/rent';
+    
+    // Tạo directory nếu chưa tồn tại
+    if (!fs.existsSync(rentPath)) {
+      fs.mkdirSync(rentPath, { recursive: true });
+      console.log(`📁 Created rent directory: ${rentPath}`);
+    }
+    
+    console.log(`📁 Saving rent image to: ${rentPath}`);
+    cb(null, rentPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    const safeName = path.parse(file.originalname).name
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .toLowerCase();
+    const filename = `rent-${safeName}-${uniqueSuffix}${ext}`;
+    
+    console.log(`💾 Rent image saved as: ${filename}`);
+    cb(null, filename);
+  }
+});
+// ==================== FOLDER STORAGE ====================
+const folderStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    ensureUploadDirs();
+    
+    // Lấy folder name từ database thông qua folderId
+    const folderId = req.params.id;
+    const folderPath = `uploads/folders/${folderId}`;
+    
+    // Tạo directory nếu chưa tồn tại
+    if (!fs.existsSync(folderPath)) {
+      fs.mkdirSync(folderPath, { recursive: true });
+      console.log(`📁 Created folder directory: ${folderPath}`);
+    }
+    
+    console.log(`📁 Saving folder image to: ${folderPath}`);
+    cb(null, folderPath);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    // Tạo tên file an toàn: thay thế khoảng trắng và ký tự đặc biệt
+    const safeName = path.parse(file.originalname).name
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .toLowerCase();
+    const filename = `${safeName}-${uniqueSuffix}${ext}`;
+    
+    console.log(`💾 Folder image saved as: ${filename}`);
+    cb(null, filename);
+  }
+});
 
 // ==================== PROJECTS STORAGE ====================
 const projectStorage = multer.diskStorage({
@@ -72,9 +149,26 @@ const projectStorage = multer.diskStorage({
   }
 });
 
-// Project file filter
+// File filter cho images
+const imageFileFilter = (req, file, cb) => {
+  const allowedMimes = [
+    'image/jpeg', 
+    'image/jpg', 
+    'image/png', 
+    'image/gif', 
+    'image/webp',
+    'image/svg+xml'
+  ];
+  
+  if (allowedMimes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`File type not allowed: ${file.mimetype}. Only image files are allowed.`), false);
+  }
+};
+
+// File filter cho projects
 const projectFileFilter = (req, file, cb) => {
-  // Cho phép image và PDF
   const allowedMimes = [
     'image/jpeg', 
     'image/jpg', 
@@ -91,94 +185,34 @@ const projectFileFilter = (req, file, cb) => {
   }
 };
 
-// ==================== MEDIA STORAGE ====================
-const mediaStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    ensureUploadDirs();
-    
-    let uploadPath = 'uploads/media/';
-    
-    // Phân loại theo file type
-    if (file.mimetype.startsWith('image/')) {
-      uploadPath += 'images';
-    } else if (file.mimetype.startsWith('video/')) {
-      uploadPath += 'videos';
-    } else if (file.mimetype.startsWith('audio/')) {
-      uploadPath += 'audio';
-    } else {
-      uploadPath += 'documents';
-    }
-    
-    console.log(`📁 Saving media file to: ${uploadPath}`);
-    cb(null, uploadPath);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    // Giữ nguyên tên file gốc + timestamp để tránh trùng lặp
-    const filename = path.parse(file.originalname).name + '-' + uniqueSuffix + ext;
-    
-    console.log(`💾 Media file saved as: ${filename}`);
-    cb(null, filename);
-  }
-});
-
-// Media file filter
-const mediaFileFilter = (req, file, cb) => {
-  // Cho phép nhiều loại file hơn
-  const allowedMimes = [
-    // Images
-    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
-    // Videos
-    'video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska',
-    // Audio
-    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/x-m4a',
-    // Documents
-    'application/pdf', 
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'text/plain',
-    'application/zip',
-    'application/x-rar-compressed'
-  ];
-  
-  if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`File type not allowed: ${file.mimetype}. Please upload supported file types.`), false);
-  }
-};
-// ==================== FOLDER STORAGE ====================
-const folderStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    ensureUploadDirs();
-    
-    // Lấy folder name từ request params
-    const folderId = req.params.id;
-    const folderPath = `uploads/folders/folder-${folderId}`;
-    
-    // Tạo directory nếu chưa tồn tại
-    if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
-    }
-    
-    console.log(`📁 Saving folder image to: ${folderPath}`);
-    cb(null, folderPath);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    const filename = path.parse(file.originalname).name + '-' + uniqueSuffix + ext;
-    
-    console.log(`💾 Folder image saved as: ${filename}`);
-    cb(null, filename);
-  }
-});
 // ==================== MULTER INSTANCES ====================
+
+// Media upload instances - CHO FEATURED IMAGE
+const uploadMedia = multer({
+  storage: mediaStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    files: 1 // Chỉ 1 file cho featured image
+  }
+});
+const uploadRentImages = multer({
+  storage: rentStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    files: 20 // Maximum 20 files
+  }
+});
+// Folder upload instances - CHỈ DÙNG CHO FOLDERS
+const uploadFolderImages = multer({
+  storage: folderStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    files: 20 // Maximum 20 files
+  }
+});
 
 // Project upload instances
 const uploadProject = multer({
@@ -189,29 +223,18 @@ const uploadProject = multer({
     files: 50 // Maximum 50 files total
   }
 });
-
-// Media upload instances
-const uploadMedia = multer({
-  storage: mediaStorage,
-  fileFilter: mediaFileFilter,
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit per file
-    files: 20 // Maximum 20 files total
-  }
-});
-const uploadFolderImages = multer({
-  storage: folderStorage,
-  fileFilter: mediaFileFilter, // Dùng chung filter với media
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 20 // Maximum 20 files
-  }
-});
+const uploadRentArray = uploadRentImages.array('images', 20);
 // ==================== UPLOAD CONFIGURATIONS ====================
+
+// Media upload configurations
+const uploadMediaSingle = uploadMedia.single('featuredImage');
+
+// Folder upload configurations
+const uploadFolderSingle = uploadFolderImages.single('image');
+const uploadFolderArray = uploadFolderImages.array('images', 20);
 
 // Project upload configurations
 const uploadProjectSingle = uploadProject.single('heroImage');
-
 const uploadProjectFields = uploadProject.fields([
   { name: 'heroImage', maxCount: 1 },
   { name: 'gallery', maxCount: 20 },
@@ -221,34 +244,21 @@ const uploadProjectFields = uploadProject.fields([
   { name: 'brochure', maxCount: 10 }
 ]);
 
-// Media upload configurations
-const uploadMediaSingle = uploadMedia.single('mediaFile');
-
-const uploadMediaFields = uploadMedia.fields([
-  { name: 'mediaFiles', maxCount: 10 }
-]);
-
-const uploadMediaArray = uploadMedia.array('mediaFiles', 10);
-
 // ==================== ERROR HANDLING MIDDLEWARE ====================
 
-// Error handling middleware for multer
 const handleMulterError = (error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     let message = 'File upload error';
     
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':
-        message = 'File too large. Please check file size limits.';
+        message = 'File too large. Maximum file size is 10MB.';
         break;
       case 'LIMIT_FILE_COUNT':
-        message = 'Too many files uploaded. Please check file count limits.';
+        message = 'Too many files uploaded.';
         break;
       case 'LIMIT_UNEXPECTED_FILE':
         message = 'Unexpected field name or too many files.';
-        break;
-      case 'LIMIT_PART_COUNT':
-        message = 'Too many parts in the form.';
         break;
       default:
         message = `Upload error: ${error.message}`;
@@ -267,13 +277,11 @@ const handleMulterError = (error, req, res, next) => {
     });
   }
   
-  // Pass other errors to the main error handler
   next(error);
 };
 
 // ==================== FILE MANAGEMENT UTILITIES ====================
 
-// Utility to delete files
 const deleteFile = (filePath) => {
   if (filePath && fs.existsSync(filePath)) {
     try {
@@ -288,7 +296,6 @@ const deleteFile = (filePath) => {
   return false;
 };
 
-// Utility to delete multiple files
 const deleteFiles = (filePaths) => {
   if (!Array.isArray(filePaths)) return;
   
@@ -297,7 +304,6 @@ const deleteFiles = (filePaths) => {
   });
 };
 
-// Utility to get file info
 const getFileInfo = (filePath) => {
   if (!filePath || !fs.existsSync(filePath)) return null;
   
@@ -315,30 +321,46 @@ const getFileInfo = (filePath) => {
   }
 };
 
+const deleteFolder = (folderPath) => {
+  if (folderPath && fs.existsSync(folderPath)) {
+    try {
+      fs.rmSync(folderPath, { recursive: true, force: true });
+      console.log(`🗑️ Deleted folder: ${folderPath}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error deleting folder ${folderPath}:`, error.message);
+      return false;
+    }
+  }
+  return false;
+};
+
 // ==================== EXPORTS ====================
 
 export {
+  // Media uploads - CHO FEATURED IMAGE
+  uploadMedia,
+  uploadMediaSingle,
+  
+  // Folder uploads
+  uploadFolderImages,
+  uploadFolderSingle,
+  uploadFolderArray,
+  
   // Project uploads
   uploadProject,
   uploadProjectSingle,
   uploadProjectFields,
-  
-  // Media uploads
-  uploadMedia,
-  uploadMediaSingle,
-  uploadMediaFields,
-  uploadMediaArray,
-  
-  uploadFolderImages, 
+  //Rent upload 
+  uploadRentArray, 
+  uploadRentImages, 
   // Error handling
   handleMulterError,
   
   // File utilities
+  deleteFolder,
   deleteFile,
   deleteFiles,
   getFileInfo,
   ensureUploadDirs
 };
-
-// Export default (project fields as default for backward compatibility)
-// export default uploadProjectFields;

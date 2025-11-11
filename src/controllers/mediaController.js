@@ -1,6 +1,76 @@
-// controllers/mediaController.js
-import { Media } from '../models/mediaModel.js';
-import { deleteFile } from '../config/multer.js';
+import mediaService from '../services/mediaService.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// @desc    Upload featured image
+// @route   POST /api/media/upload-featured-image
+export const uploadFeaturedImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Tạo đường dẫn tương đối để lưu trong database
+    const relativePath = `/uploads/media/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      data: {
+        filename: req.file.filename,
+        path: relativePath,
+        fullUrl: `${req.protocol}://${req.get('host')}${relativePath}`
+      },
+      message: 'Image uploaded successfully'
+    });
+
+  } catch (error) {
+    console.error('Error in uploadFeaturedImage:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Delete featured image
+// @route   DELETE /api/media/delete-featured-image/:filename
+export const deleteFeaturedImage = async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const uploadsDir = path.join(__dirname, '../uploads/media');
+    const filePath = path.join(uploadsDir, filename);
+
+    // Kiểm tra file có tồn tại không
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({
+        success: true,
+        message: 'Image deleted successfully'
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in deleteFeaturedImage:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
 
 // @desc    Create new media
 // @route   POST /api/media
@@ -24,21 +94,16 @@ export const createMedia = async (req, res) => {
       });
     }
 
-    // Tạo media object
-    const mediaData = {
+    // Gọi service để tạo media
+    const newMedia = await mediaService.createMediaService({
       title,
-      content, // HTML content từ TinyMCE
-      excerpt: excerpt || '',
-      category: category || 'lifestyle',
-      status: status || 'draft',
-      featuredImage: featuredImage || '',
-      tags: tags ? tags.split(',').map(tag => tag.trim()) : []
-    };
-
-    console.log('Creating media with data:', mediaData);
-    
-    // Lưu vào database
-    const newMedia = await Media.create(mediaData);
+      content,
+      excerpt,
+      category,
+      status,
+      featuredImage, // Đây sẽ là đường dẫn file
+      tags
+    });
     
     res.status(201).json({
       success: true,
@@ -68,35 +133,22 @@ export const getMedia = async (req, res) => {
       search
     } = req.query;
 
-    const query = {};
-
-    // Add filters
-    if (status && status !== 'all') query.status = status;
-    if (category && category !== 'all') query.category = category;
-
-    // Add search
-    if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { excerpt: { $regex: search, $options: 'i' } },
-        { tags: { $in: [new RegExp(search, 'i')] } }
-      ];
-    }
-
-    const media = await Media.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Media.countDocuments(query);
-
+    // Gọi service để lấy media
+    const result = await mediaService.getMediaService({
+      page: parseInt(page),
+      limit: parseInt(limit),
+      status,
+      category,
+      search
+    });
+    console.log(result)
     res.json({
       success: true,
-      data: media,
+      data: result.media,
       pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / limit),
-        total
+        current: result.currentPage,
+        pages: result.totalPages,
+        total: result.total
       }
     });
 
@@ -114,14 +166,10 @@ export const getMedia = async (req, res) => {
 // @route   GET /api/media/:id
 export const getMediaById = async (req, res) => {
   try {
-    const media = await Media.findById(req.params.id);
+    const { id } = req.params;
 
-    if (!media) {
-      return res.status(404).json({
-        success: false,
-        message: 'Media not found'
-      });
-    }
+    // Gọi service để lấy media theo ID
+    const media = await mediaService.getMediaByIdService(id);
 
     res.json({
       success: true,
@@ -130,6 +178,14 @@ export const getMediaById = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getMediaById:', error);
+    
+    if (error.message === 'Media not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Media not found'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -153,34 +209,16 @@ export const updateMedia = async (req, res) => {
       tags
     } = req.body;
 
-    // Tìm media hiện tại
-    const existingMedia = await Media.findById(id);
-    if (!existingMedia) {
-      return res.status(404).json({
-        success: false,
-        message: 'Media not found'
-      });
-    }
-
-    // Tạo update object
-    const updateFields = {
+    // Gọi service để cập nhật media
+    const updatedMedia = await mediaService.updateMediaService(id, {
       title,
       content,
       excerpt,
       category,
       status,
       featuredImage,
-      tags: tags ? tags.split(',').map(tag => tag.trim()) : existingMedia.tags,
-      updatedAt: new Date()
-    };
-
-    console.log('Updating media with data:', updateFields);
-    
-    const updatedMedia = await Media.findByIdAndUpdate(
-      id, 
-      updateFields,
-      { new: true, runValidators: true }
-    );
+      tags
+    });
     
     res.json({
       success: true,
@@ -190,6 +228,14 @@ export const updateMedia = async (req, res) => {
 
   } catch (error) {
     console.error('Error in updateMedia:', error);
+    
+    if (error.message === 'Media not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Media not found'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -202,16 +248,10 @@ export const updateMedia = async (req, res) => {
 // @route   DELETE /api/media/:id
 export const remove = async (req, res) => {
   try {
-    const media = await Media.findById(req.params.id);
+    const { id } = req.params;
 
-    if (!media) {
-      return res.status(404).json({
-        success: false,
-        message: 'Media not found'
-      });
-    }
-
-    await Media.findByIdAndDelete(req.params.id);
+    // Gọi service để xóa media
+    await mediaService.deleteMediaService(id);
 
     res.json({
       success: true,
@@ -220,6 +260,46 @@ export const remove = async (req, res) => {
 
   } catch (error) {
     console.error('Error in remove media:', error);
+    
+    if (error.message === 'Media not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Media not found'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Bulk delete media
+// @route   POST /api/media/bulk-delete
+export const bulkDeleteMedia = async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'IDs array is required'
+      });
+    }
+
+    // Gọi service để xóa nhiều media
+    const result = await mediaService.bulkDeleteMediaService(ids);
+
+    res.json({
+      success: true,
+      message: `Deleted ${result.deletedCount} media items successfully`,
+      deletedCount: result.deletedCount
+    });
+
+  } catch (error) {
+    console.error('Error in bulkDeleteMedia:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',

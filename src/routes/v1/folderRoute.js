@@ -9,7 +9,7 @@ import {
   uploadImages,
   deleteImage
 } from "../../controllers/folderController.js";
-import { uploadMediaArray, handleMulterError } from '../../config/multer.js';
+import { uploadFolderArray, handleMulterError } from '../../config/multer.js';
 
 const Router = express.Router({ mergeParams: true });
 
@@ -21,8 +21,8 @@ Router.post('/', createFolder);
 Router.put('/:id', updateFolder);
 Router.delete('/:id', removeFolder);
 
-// Image management routes
-Router.post('/:id/upload', uploadMediaArray, handleMulterError, uploadImages);
+// Image management routes - SỬ DỤNG UPLOAD FOLDER ARRAY
+Router.post('/:id/upload', uploadFolderArray, handleMulterError, uploadImages);
 Router.delete('/:folderId/images/:imageId', deleteImage);
 
 export default Router;

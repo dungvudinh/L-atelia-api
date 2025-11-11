@@ -1,8 +1,9 @@
 // controllers/folderController.js
 import { Folder } from '../models/folderModel.js';
 import { deleteFile } from '../config/multer.js';
-import fs from 'fs';
 import path from 'path';
+import { deleteFolder } from '../config/multer.js';
+import fs from 'fs'; // Thêm import fs
 
 // @desc    Create new folder
 // @route   POST /api/folders
@@ -10,10 +11,23 @@ export const createFolder = async (req, res) => {
   try {
     const { name, parentFolder } = req.body;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: 'Folder name is required'
+      });
+    }
+
+    // Check if folder name already exists
+    const existingFolder = await Folder.findOne({ 
+      name: name.trim(),
+      parentFolder: parentFolder || null 
+    });
+
+    if (existingFolder) {
+      return res.status(400).json({
+        success: false,
+        message: 'Folder name already exists'
       });
     }
 
@@ -29,7 +43,7 @@ export const createFolder = async (req, res) => {
     }
 
     const folder = new Folder({
-      name,
+      name: name.trim(),
       parentFolder: parentFolder || null
     });
 
@@ -51,7 +65,7 @@ export const createFolder = async (req, res) => {
   }
 };
 
-// @desc    Get all folders with hierarchy
+// @desc    Get all folders
 // @route   GET /api/folders
 export const getFolders = async (req, res) => {
   try {
@@ -59,25 +73,9 @@ export const getFolders = async (req, res) => {
       .populate('parentFolder', 'name')
       .sort({ createdAt: -1 });
 
-    // Build folder hierarchy
-    const buildHierarchy = (parentId = null) => {
-      return folders
-        .filter(folder => 
-          (parentId === null && !folder.parentFolder) || 
-          (folder.parentFolder && folder.parentFolder._id.toString() === parentId)
-        )
-        .map(folder => ({
-          ...folder.toObject(),
-          subfolders: buildHierarchy(folder._id.toString())
-        }));
-    };
-
-    const hierarchicalFolders = buildHierarchy();
-
     res.json({
       success: true,
-      data: hierarchicalFolders,
-      flat: folders,
+      data: folders,
       total: folders.length
     });
 
@@ -144,16 +142,25 @@ export const uploadImages = async (req, res) => {
     const uploadedImages = [];
 
     for (const file of req.files) {
+      // Tạo URL truy cập ảnh
+      const imageUrl = `/uploads/folders/${id}/${file.filename}`;
+
       const imageData = {
         filename: file.filename,
         originalName: file.originalname,
-        url: `/uploads/folders/${folder.name}/${file.filename}`,
+        url: imageUrl,
         size: file.size,
         mimetype: file.mimetype
       };
 
       await folder.addImage(imageData);
-      uploadedImages.push(imageData);
+      
+      // Lấy ID của image vừa thêm
+      const newImage = folder.images[folder.images.length - 1];
+      uploadedImages.push({
+        _id: newImage._id,
+        ...imageData
+      });
     }
 
     res.json({
@@ -206,9 +213,28 @@ export const updateFolder = async (req, res) => {
       }
     }
 
+    // Check if new name already exists (excluding current folder)
+    if (name && name.trim() !== folder.name) {
+      const existingFolder = await Folder.findOne({ 
+        name: name.trim(),
+        parentFolder: parentFolder || folder.parentFolder,
+        _id: { $ne: id }
+      });
+
+      if (existingFolder) {
+        return res.status(400).json({
+          success: false,
+          message: 'Folder name already exists in this location'
+        });
+      }
+    }
+
     const updatedFolder = await Folder.findByIdAndUpdate(
       id,
-      { name, parentFolder: parentFolder || null },
+      { 
+        name: name ? name.trim() : folder.name, 
+        parentFolder: parentFolder || folder.parentFolder 
+      },
       { new: true, runValidators: true }
     );
 
@@ -247,6 +273,14 @@ export const removeFolder = async (req, res) => {
         message: 'Cannot delete folder that contains images. Please delete all images first.'
       });
     }
+
+    // Xóa thư mục vật lý nếu tồn tại - SỬA LẠI DÙNG fs thay vì require
+    const folderPath = `uploads/folders/${req.params.id}`;
+    deleteFolder(folderPath);
+    // if (fs.existsSync(folderPath)) {
+    //   fs.rmSync(folderPath, { recursive: true, force: true });
+    //   console.log(`🗑️ Deleted folder directory: ${folderPath}`);
+    // }
 
     await Folder.findByIdAndDelete(req.params.id);
 
@@ -288,11 +322,11 @@ export const deleteImage = async (req, res) => {
       });
     }
 
-    // Xóa file vật lý (nếu có)
-    const filePath = path.join('uploads', 'folders', folder.name, imageToDelete.filename);
+    // Xóa file vật lý
+    const filePath = path.join('uploads', 'folders', folderId, imageToDelete.filename);
     deleteFile(filePath);
 
-    // Xóa ảnh khỏi folder
+    // Xóa ảnh khỏi folder trong database
     await folder.removeImage(imageId);
 
     res.json({

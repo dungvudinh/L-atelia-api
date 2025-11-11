@@ -1,129 +1,86 @@
 // services/mediaService.js
 import { Media } from '../models/mediaModel.js';
-import fs from 'fs';
-import path from 'path';
 
-// Helper function to determine file type
-const getFileType = (mimeType) => {
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('video/')) return 'video';
-  return 'document';
-};
-
-// Helper function to extract image dimensions (for images only)
-const getImageDimensions = (filePath) => {
-  return new Promise((resolve) => {
-    // You can use sharp or other image processing libraries here
-    // For now, return null or implement basic dimension extraction
-    resolve({ width: null, height: null });
-  });
-};
-
-// Safe file deletion function
-const safeDeleteFile = (filePath) => {
-  if (filePath && fs.existsSync(filePath)) {
-    try {
-      fs.unlinkSync(filePath);
-      console.log(`🗑️ Deleted file: ${filePath}`);
-    } catch (deleteError) {
-      console.error(`⚠️ Could not delete file ${filePath}:`, deleteError.message);
-    }
-  }
-};
-
+// Service để tạo media mới
 export const createMediaService = async (mediaData) => {
   try {
     const {
       title,
-      description,
-      type,
+      content,
+      excerpt,
       category,
-      tags,
       status,
-      files
+      featuredImage,
+      tags
     } = mediaData;
 
-    console.log('Creating media with data:', mediaData);
+    // Xử lý tags
+    let processedTags = [];
+    if (tags) {
+      if (Array.isArray(tags)) {
+        processedTags = tags.map(tag => {
+          if (typeof tag === 'string') {
+            return tag.trim();
+          }
+          return String(tag).trim();
+        }).filter(tag => tag);
+      } else if (typeof tags === 'string') {
+        processedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      }
+    }
 
-    // Xử lý multiple files
-    const mediaItems = await Promise.all(
-      files.mediaFiles.map(async (file) => {
-        let dimensions = null;
-        
-        // Extract dimensions for images
-        if (file.mimetype.startsWith('image/')) {
-          dimensions = await getImageDimensions(file.path);
-        }
+    // Tạo media object
+    const media = {
+      title,
+      content,
+      excerpt: excerpt || '',
+      category: category || 'lifestyle',
+      status: status || 'draft',
+      featuredImage: featuredImage || '',
+      tags: processedTags
+    };
 
-        return {
-          title: title || file.originalname,
-          description: description || '',
-          type: type || getFileType(file.mimetype),
-          category: category || 'Properties',
-          filePath: file.path,
-          fileName: file.originalname,
-          fileSize: file.size,
-          mimeType: file.mimetype,
-          dimensions: dimensions,
-          tags: tags || [],
-          status: status || 'active'
-        };
-      })
-    );
-
-    const createdMedia = await Media.insertMany(mediaItems);
-    console.log(`✅ Created ${createdMedia.length} media items`);
+    console.log('Creating media with data:', media);
     
-    return createdMedia;
+    // Lưu vào database
+    const newMedia = await Media.create(media);
+    return newMedia;
   } catch (error) {
     console.error('Error in createMediaService:', error);
-    
-    // Xóa files nếu create failed
-    if (mediaData.files && mediaData.files.mediaFiles) {
-      mediaData.files.mediaFiles.forEach(file => {
-        safeDeleteFile(file.path);
-      });
-    }
-    
     throw error;
   }
 };
 
+// Service để lấy danh sách media với pagination và filtering
 export const getMediaService = async (filters = {}) => {
   try {
     const { 
-      search, 
-      type, 
-      category, 
-      status, 
       page = 1, 
-      limit = 12 
+      limit = 10, 
+      status, 
+      category, 
+      search 
     } = filters;
     
-    let query = {};
+    const query = {};
     
     // Search filter
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
+        { excerpt: { $regex: search, $options: 'i' } },
         { tags: { $in: [new RegExp(search, 'i')] } }
       ];
-    }
-
-    // Type filter
-    if (type && type !== 'all') {
-      query.type = type;
-    }
-
-    // Category filter
-    if (category && category !== 'all') {
-      query.category = category;
     }
 
     // Status filter
     if (status && status !== 'all') {
       query.status = status;
+    }
+
+    // Category filter
+    if (category && category !== 'all') {
+      query.category = category;
     }
 
     const media = await Media.find(query)
@@ -145,6 +102,7 @@ export const getMediaService = async (filters = {}) => {
   }
 };
 
+// Service để lấy media theo ID
 export const getMediaByIdService = async (id) => {
   try {
     const media = await Media.findById(id);
@@ -158,16 +116,17 @@ export const getMediaByIdService = async (id) => {
   }
 };
 
+// Service để cập nhật media
 export const updateMediaService = async (id, mediaData) => {
   try {
     const {
       title,
-      description,
-      type,
+      content,
+      excerpt,
       category,
-      tags,
       status,
-      files
+      featuredImage,
+      tags
     } = mediaData;
 
     // Tìm media hiện tại
@@ -176,36 +135,32 @@ export const updateMediaService = async (id, mediaData) => {
       throw new Error('Media not found');
     }
 
-    // Tạo update object
-    const updateFields = {
-      title,
-      description,
-      type,
-      category,
-      tags,
-      status,
-      updatedAt: new Date()
-    };
-
-    // Xử lý file mới nếu có
-    if (files.mediaFiles && files.mediaFiles.length > 0) {
-      const newFile = files.mediaFiles[0];
-      
-      // Xóa file cũ
-      safeDeleteFile(existingMedia.filePath);
-      
-      // Cập nhật thông tin file mới
-      updateFields.filePath = newFile.path;
-      updateFields.fileName = newFile.originalname;
-      updateFields.fileSize = newFile.size;
-      updateFields.mimeType = newFile.mimetype;
-      
-      // Extract dimensions for images
-      if (newFile.mimetype.startsWith('image/')) {
-        const dimensions = await getImageDimensions(newFile.path);
-        updateFields.dimensions = dimensions;
+    // Xử lý tags
+    let processedTags = [];
+    if (tags) {
+      if (Array.isArray(tags)) {
+        processedTags = tags.map(tag => {
+          if (typeof tag === 'string') {
+            return tag.trim();
+          }
+          return String(tag).trim();
+        }).filter(tag => tag);
+      } else if (typeof tags === 'string') {
+        processedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
       }
     }
+
+    // Tạo update object
+    const updateFields = {
+      title: title || existingMedia.title,
+      content: content || existingMedia.content,
+      excerpt: excerpt || existingMedia.excerpt,
+      category: category || existingMedia.category,
+      status: status || existingMedia.status,
+      featuredImage: featuredImage || existingMedia.featuredImage,
+      tags: processedTags.length > 0 ? processedTags : existingMedia.tags,
+      updatedAt: new Date()
+    };
 
     console.log('Updating media with data:', updateFields);
     
@@ -218,69 +173,40 @@ export const updateMediaService = async (id, mediaData) => {
     return updatedMedia;
   } catch (error) {
     console.error('Error in updateMediaService:', error);
-    
-    // Xóa file mới nếu update failed
-    if (mediaData.files && mediaData.files.mediaFiles) {
-      mediaData.files.mediaFiles.forEach(file => {
-        safeDeleteFile(file.path);
-      });
-    }
-    
     throw error;
   }
 };
 
+// Service để xóa media
 export const deleteMediaService = async (id) => {
   try {
-    const media = await Media.findById(id);
+    const media = await Media.findByIdAndDelete(id);
     if (!media) {
       throw new Error('Media not found');
     }
-
-    // Xóa file từ disk
-    safeDeleteFile(media.filePath);
-
-    // Xóa record từ database
-    await Media.findByIdAndDelete(id);
-    
-    console.log(`✅ Media ${id} deleted successfully`);
-    return { message: 'Media deleted successfully' };
+    return media;
   } catch (error) {
     console.error('Error in deleteMediaService:', error);
     throw error;
   }
 };
 
+// Service để xóa nhiều media
 export const bulkDeleteMediaService = async (ids) => {
   try {
-    const mediaItems = await Media.find({ _id: { $in: ids } });
-    
-    // Xóa tất cả files từ disk
-    mediaItems.forEach(media => {
-      safeDeleteFile(media.filePath);
-    });
-
-    // Xóa tất cả records từ database
     const result = await Media.deleteMany({ _id: { $in: ids } });
-    
-    console.log(`✅ Bulk deleted ${result.deletedCount} media items`);
-    return { 
-      message: `Deleted ${result.deletedCount} media items successfully`,
-      deletedCount: result.deletedCount 
-    };
+    return result;
   } catch (error) {
     console.error('Error in bulkDeleteMediaService:', error);
     throw error;
   }
 };
 
+// Service để lấy media theo category
 export const getMediaByCategoryService = async (category) => {
   try {
-    const media = await Media.find({ 
-      category: category,
-      status: 'active'
-    }).sort({ createdAt: -1 });
-    
+    const media = await Media.find({ category })
+      .sort({ createdAt: -1 });
     return media;
   } catch (error) {
     console.error('Error in getMediaByCategoryService:', error);
@@ -288,7 +214,19 @@ export const getMediaByCategoryService = async (category) => {
   }
 };
 
-// Export service object
+// Service để lấy media theo status
+export const getMediaByStatusService = async (status) => {
+  try {
+    const media = await Media.find({ status })
+      .sort({ createdAt: -1 });
+    return media;
+  } catch (error) {
+    console.error('Error in getMediaByStatusService:', error);
+    throw error;
+  }
+};
+
+// Export tất cả services
 const mediaService = {
   createMediaService,
   getMediaService,
@@ -296,7 +234,8 @@ const mediaService = {
   updateMediaService,
   deleteMediaService,
   bulkDeleteMediaService,
-  getMediaByCategoryService
+  getMediaByCategoryService,
+  getMediaByStatusService
 };
 
 export default mediaService;

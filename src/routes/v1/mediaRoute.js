@@ -1,21 +1,33 @@
-// routes/mediaRoutes.js
-import express from "express";
-import { 
+import express from 'express';
+import {
+  createMedia,
   getMedia,
   getMediaById,
-  createMedia,
   updateMedia,
-  remove
-} from "../../controllers/mediaController.js";
+  remove,
+  bulkDeleteMedia,
+  uploadFeaturedImage,
+  deleteFeaturedImage
+} from '../../controllers/mediaController.js';
+import { uploadMediaSingle, handleMulterError } from '../../config/multer.js';
 
-const Router = express.Router({ mergeParams: true });
+const router = express.Router();
 
-Router.get('/', getMedia);
-Router.get('/:id', getMediaById);
+// Route upload ảnh đại diện
+router.post('/upload-featured-image', uploadMediaSingle, handleMulterError, uploadFeaturedImage);
+router.delete('/delete-featured-image/:filename', deleteFeaturedImage);
 
-// Protected routes
-Router.post('/', createMedia);
-Router.put('/:id', updateMedia);
-Router.delete('/:id', remove);
+// Các route hiện có
+router.route('/')
+  .post(createMedia)
+  .get(getMedia);
 
-export default Router;
+router.route('/bulk-delete')
+  .post(bulkDeleteMedia);
+
+router.route('/:id')
+  .get(getMediaById)
+  .put(updateMedia)
+  .delete(remove);
+
+export default router;
