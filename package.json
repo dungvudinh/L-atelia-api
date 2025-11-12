@@ -2,7 +2,6 @@
   "name": "l-atelia-api",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "cross-env BUILD_MODE=dev nodemon --exec babel-node ./src/server.js",
