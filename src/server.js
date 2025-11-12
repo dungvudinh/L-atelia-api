@@ -6,11 +6,7 @@ import APIs_V1 from './routes/v1/index.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import initializeDatabase from './scripts/initialDatabase.js';
-const __filename = fileURLToPath(import.meta.url);
-// const __dirname = path.dirname(__filename);
 
 const allowOrigins = ['http://localhost:5173', 'http://localhost:5174','https://latelia.store', 'https://admin.latelia.store' ];
 const app = express();
