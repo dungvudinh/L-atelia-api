@@ -90,6 +90,31 @@ const userService = {
       { lastLogin: new Date() },
       { new: true }
     ).select('-password');
+  }, 
+  // Change user status
+  changeUserStatus: async (id, isActive) => {
+    const user = await userModel.findByIdAndUpdate(
+      id,
+      { isActive },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return user;
+  },
+  bulkChangeStatus: async (userIds, isActive) => {
+    const result = await userModel.updateMany(
+      { 
+        _id: { $in: userIds },
+        role: { $ne: 'admin' } // Prevent modifying admin users
+      },
+      { isActive }
+    );
+
+    return result;
   }
 };
 

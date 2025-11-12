@@ -5,7 +5,6 @@ const authController = {
   // Login
   login: async (req, res) => {
     try {
-      console.log(req.body)
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
@@ -23,6 +22,7 @@ const authController = {
         data: result
       });
     } catch (error) {
+      console.log("ERROR:", error)
       res.status(401).json({
         success: false,
         message: error.message

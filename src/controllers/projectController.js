@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import projectService from "../services/projectService.js";
+
 export const createProject = async (req, res, next) => {
   try {
     console.log('=== REQUEST BODY ===', req.body);
@@ -20,11 +21,10 @@ export const createProject = async (req, res, next) => {
       }
     }
 
-    // Xử lý files
+    // Xử lý files - ĐÃ LOẠI BỎ floorPlans
     const files = {
       heroImage: req.files['heroImage'] ? req.files['heroImage'][0] : null,
       gallery: req.files['gallery'] || [],
-      floorPlans: req.files['floorPlans'] || [],
       constructionProgress: req.files['constructionProgress'] || [],
       designImages: req.files['designImages'] || [],
       brochure: req.files['brochure'] || []
@@ -50,6 +50,7 @@ export const createProject = async (req, res, next) => {
     next(err);
   }
 };
+
 export const getProjects = async (req, res, next) => {
   try {
     const filters = {
@@ -68,6 +69,7 @@ export const getProjects = async (req, res, next) => {
     next(err);
   }
 };
+
 export const getProjectById = async (req, res, next) => {
   try {
     const project = await projectService.getProjectByIdService(req.params.id);
@@ -79,6 +81,7 @@ export const getProjectById = async (req, res, next) => {
     next(err);
   }
 };
+
 export const getProjectBySlug = async (req, res, next) => {
   try {
     const project = await projectService.getProjectBySlugService(req.params.slug);
@@ -90,6 +93,7 @@ export const getProjectBySlug = async (req, res, next) => {
     next(err);
   }
 };
+
 // controllers/projectController.js
 export const update = async (req, res, next) => {
   try {
@@ -98,7 +102,7 @@ export const update = async (req, res, next) => {
     
     const { id } = req.params;
     
-    // Parse JSON data từ field 'data' (giống như create)
+    // Parse JSON data từ field 'data'
     let updateData = {};
     if (req.body.data) {
       try {
@@ -113,11 +117,10 @@ export const update = async (req, res, next) => {
       }
     }
 
-    // Xử lý files (nếu có file mới upload)
+    // Xử lý files - ĐÃ LOẠI BỎ floorPlans
     const files = {
       heroImage: req.files['heroImage'] ? req.files['heroImage'][0] : null,
       gallery: req.files['gallery'] || [],
-      floorPlans: req.files['floorPlans'] || [],
       constructionProgress: req.files['constructionProgress'] || [],
       designImages: req.files['designImages'] || [],
       brochure: req.files['brochure'] || []
@@ -143,6 +146,7 @@ export const update = async (req, res, next) => {
     next(err);
   }
 };
+
 export const remove = async (req, res, next) => {
   try {
     await projectService.deleteProjectService(req.params.id);
@@ -154,6 +158,7 @@ export const remove = async (req, res, next) => {
     next(err);
   }
 };
+
 export const deleteImages = async (req, res, next) => {
   try {
     const { imageType, imagePaths } = req.body;
@@ -167,7 +172,3 @@ export const deleteImages = async (req, res, next) => {
     next(err);
   }
 };
-
-  
-
-

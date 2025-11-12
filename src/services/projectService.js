@@ -1,40 +1,5 @@
-// const Project = require('../models/Project');
-// const { fetchExternalData } = require('./externalApiService');
-// import {fetchExternalData} from './'
-// import {create, getProjects} from '../models/projectModel.js'
-// export const createProject = async (data) => {
-//   // Optional: enrich with external API
-//   // const external = await fetchExternalData('/properties');
-//   const project = await create(data);
-//   return await project.save();
-// };
-
-// export const getAllProjects = async () => {
-//  return await getProjects();
-// };
-
-// const getProjectById = async (id) => {
-//   return await Project.findById(id);
-// };
-
-// const updateProject = async (id, data) => {
-//   return await Project.findByIdAndUpdate(id, data, { new: true });
-// };
-
-// const deleteProject = async (id) => {
-//   return await Project.findByIdAndDelete(id);
-// };
-
 import {Project} from '../models/projectModel.js';
-// import { PROJECT_CREATE_SCHEMA, PROJECT_UPDATE_SCHEMA} from '../validations/projectValidation.js';
 import fs from 'fs';
-import path from 'path';
-const validateProjectData = async (projectData, schema) => {
-  return await schema.validateAsync(projectData, { 
-    abortEarly: false, 
-    stripUnknown: true 
-  });
-};
 
 // services/projectService.js
 export const createProjectService = async (projectData) => {
@@ -44,22 +9,25 @@ export const createProjectService = async (projectData) => {
       description,
       status,
       location,
-      details,
-      featureSections,
+      propertyFeatures,
+      specifications,
+      propertyHighlights,
+      specialSections,
       files
     } = projectData;
 
-    // Tạo project object với file paths
+    // Tạo project object với file paths - ĐÃ LOẠI BỎ floorPlans
     const project = {
       title,
       description,
       status: status || 'draft',
       location,
-      details: details || {},
-      featureSections: featureSections || [],
+      propertyFeatures: propertyFeatures || [],
+      specifications: specifications || [],
+      propertyHighlights: propertyHighlights || [],
+      specialSections: specialSections || [],
       heroImage: files.heroImage ? files.heroImage.path : null,
       gallery: files.gallery.map(file => file.path),
-      floorPlans: files.floorPlans.map(file => file.path),
       constructionProgress: files.constructionProgress.map(file => file.path),
       designImages: files.designImages.map(file => file.path),
       brochure: files.brochure.map(file => file.path)
@@ -75,6 +43,7 @@ export const createProjectService = async (projectData) => {
     throw error;
   }
 };
+
 const getProjectsService = async (filters = {}) => {
   try {
     const { search, status, page = 1, limit = 10 } = filters;
@@ -98,7 +67,7 @@ const getProjectsService = async (filters = {}) => {
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .select('-featureSections -details'); // Exclude heavy fields for list view
+      .select('-propertyHighlights -specialSections'); // Exclude heavy fields for list view
 
     const total = await Project.countDocuments(query);
 
@@ -145,8 +114,10 @@ export const updateProjectService = async (id, projectData) => {
       description,
       status,
       location,
-      details,
-      featureSections,
+      propertyFeatures,
+      specifications,
+      propertyHighlights,
+      specialSections,
       files
     } = projectData;
 
@@ -164,32 +135,32 @@ export const updateProjectService = async (id, projectData) => {
           console.log(`🗑️ Deleted old file: ${filePath}`);
         } catch (deleteError) {
           console.error(`⚠️ Could not delete file ${filePath}:`, deleteError.message);
-          // Không throw error để không ảnh hưởng đến update
         }
       }
     };
 
-    // Tạo update object
+    // Tạo update object với cấu trúc mới
     const updateFields = {
       title,
       description,
       status,
       location,
-      details: { ...existingProject.details, ...details },
-      featureSections,
+      propertyFeatures: propertyFeatures || [],
+      specifications: specifications || [],
+      propertyHighlights: propertyHighlights || [],
+      specialSections: specialSections || [],
       updatedAt: new Date()
     };
 
-    // Xử lý files - XÓA ẢNH CŨ KHI CÓ ẢNH MỚI
+    // Xử lý files - ĐÃ LOẠI BỎ floorPlans
     if (files.heroImage) {
-      // Xóa heroImage cũ nếu có
       if (existingProject.heroImage) {
         safeDeleteFile(existingProject.heroImage);
       }
       updateFields.heroImage = files.heroImage.path;
     }
     
-    // Xử lý gallery - THÊM ảnh mới, không xóa ảnh cũ (trừ khi có logic xóa cụ thể)
+    // Xử lý gallery - THÊM ảnh mới
     if (files.gallery.length > 0) {
       updateFields.gallery = [
         ...existingProject.gallery,
@@ -197,14 +168,7 @@ export const updateProjectService = async (id, projectData) => {
       ];
     }
     
-    // Tương tự cho các loại files khác
-    if (files.floorPlans.length > 0) {
-      updateFields.floorPlans = [
-        ...existingProject.floorPlans,
-        ...files.floorPlans.map(file => file.path)
-      ];
-    }
-    
+    // Xử lý construction progress
     if (files.constructionProgress.length > 0) {
       updateFields.constructionProgress = [
         ...existingProject.constructionProgress,
@@ -212,6 +176,7 @@ export const updateProjectService = async (id, projectData) => {
       ];
     }
     
+    // Xử lý design images
     if (files.designImages.length > 0) {
       updateFields.designImages = [
         ...existingProject.designImages,
@@ -219,6 +184,7 @@ export const updateProjectService = async (id, projectData) => {
       ];
     }
     
+    // Xử lý brochure
     if (files.brochure.length > 0) {
       updateFields.brochure = [
         ...existingProject.brochure,
@@ -265,9 +231,6 @@ const deleteProjectImagesService = async (id, imageType, imagePaths) => {
       case 'gallery':
         updateOperation.gallery = project.gallery.filter(img => !imagePaths.includes(img));
         break;
-      case 'floorPlans':
-        updateOperation.floorPlans = project.floorPlans.filter(img => !imagePaths.includes(img));
-        break;
       case 'constructionProgress':
         updateOperation.constructionProgress = project.constructionProgress.filter(img => !imagePaths.includes(img));
         break;
@@ -289,6 +252,7 @@ const deleteProjectImagesService = async (id, imageType, imagePaths) => {
     throw error;
   }
 };
+
 const projectService = {
   createProjectService, 
   getProjectsService,
@@ -298,4 +262,5 @@ const projectService = {
   deleteProjectService,
   deleteProjectImagesService
 }
+
 export default projectService;

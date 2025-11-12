@@ -15,7 +15,7 @@ router.use(authMiddleware.verifyToken);
 router.post(
   '/',
   authMiddleware.isAdmin,
-  validationMiddleware.validateUser,
+  validationMiddleware.validateUserCreate,
   userController.createUser
 );
 
@@ -34,7 +34,7 @@ router.get(
 router.put(
   '/:id',
   authMiddleware.isAdmin,
-  validationMiddleware.validateUser,
+  validationMiddleware.validateUserUpdate,
   userController.updateUser
 );
 
@@ -50,5 +50,15 @@ router.patch(
   validationMiddleware.validateChangePassword,
   userController.changePassword
 );
+router.patch(
+  '/:id/status',
+  authMiddleware.isAdmin,
+  userController.changeUserStatus
+);
 
+router.patch(
+  '/bulk/status',
+  authMiddleware.isAdmin,
+  userController.bulkChangeStatus
+);
 export default router;

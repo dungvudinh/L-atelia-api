@@ -7,11 +7,10 @@ const ensureUploadDirs = () => {
   const uploadDirs = [
     'uploads/rent', 
     'uploads/folders',
-    'uploads/media', // THÊM THƯ MỤC MEDIA
+    'uploads/media',
     'uploads/projects/hero',
     'uploads/projects/gallery',
-    'uploads/projects/floorplans',
-    'uploads/projects/progress',
+    'uploads/projects/progress', // ĐÃ LOẠI BỎ floorplans
     'uploads/projects/design',
     'uploads/projects/brochures'
   ];
@@ -47,13 +46,13 @@ const mediaStorage = multer.diskStorage({
     cb(null, filename);
   }
 });
+
 // ==================== RENT STORAGE ====================
 const rentStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
     const rentPath = 'uploads/rent';
     
-    // Tạo directory nếu chưa tồn tại
     if (!fs.existsSync(rentPath)) {
       fs.mkdirSync(rentPath, { recursive: true });
       console.log(`📁 Created rent directory: ${rentPath}`);
@@ -74,16 +73,15 @@ const rentStorage = multer.diskStorage({
     cb(null, filename);
   }
 });
+
 // ==================== FOLDER STORAGE ====================
 const folderStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
     
-    // Lấy folder name từ database thông qua folderId
     const folderId = req.params.id;
     const folderPath = `uploads/folders/${folderId}`;
     
-    // Tạo directory nếu chưa tồn tại
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
       console.log(`📁 Created folder directory: ${folderPath}`);
@@ -95,7 +93,6 @@ const folderStorage = multer.diskStorage({
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
-    // Tạo tên file an toàn: thay thế khoảng trắng và ký tự đặc biệt
     const safeName = path.parse(file.originalname).name
       .replace(/[^a-zA-Z0-9]/g, '-')
       .toLowerCase();
@@ -119,9 +116,6 @@ const projectStorage = multer.diskStorage({
         break;
       case 'gallery':
         uploadPath += 'gallery';
-        break;
-      case 'floorPlans':
-        uploadPath += 'floorplans';
         break;
       case 'constructionProgress':
         uploadPath += 'progress';
@@ -187,43 +181,47 @@ const projectFileFilter = (req, file, cb) => {
 
 // ==================== MULTER INSTANCES ====================
 
-// Media upload instances - CHO FEATURED IMAGE
+// Media upload instances
 const uploadMedia = multer({
   storage: mediaStorage,
   fileFilter: imageFileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 1 // Chỉ 1 file cho featured image
+    fileSize: 10 * 1024 * 1024,
+    files: 1
   }
 });
+
 const uploadRentImages = multer({
   storage: rentStorage,
   fileFilter: imageFileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 20 // Maximum 20 files
+    fileSize: 10 * 1024 * 1024,
+    files: 20
   }
 });
-// Folder upload instances - CHỈ DÙNG CHO FOLDERS
+
+// Folder upload instances
 const uploadFolderImages = multer({
   storage: folderStorage,
   fileFilter: imageFileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 20 // Maximum 20 files
+    fileSize: 10 * 1024 * 1024,
+    files: 20
   }
 });
 
-// Project upload instances
+// Project upload instances - ĐÃ LOẠI BỎ floorPlans
 const uploadProject = multer({
   storage: projectStorage,
   fileFilter: projectFileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit per file
-    files: 50 // Maximum 50 files total
+    fileSize: 10 * 1024 * 1024,
+    files: 50
   }
 });
+
 const uploadRentArray = uploadRentImages.array('images', 20);
+
 // ==================== UPLOAD CONFIGURATIONS ====================
 
 // Media upload configurations
@@ -233,12 +231,11 @@ const uploadMediaSingle = uploadMedia.single('featuredImage');
 const uploadFolderSingle = uploadFolderImages.single('image');
 const uploadFolderArray = uploadFolderImages.array('images', 20);
 
-// Project upload configurations
+// Project upload configurations - ĐÃ LOẠI BỎ floorPlans
 const uploadProjectSingle = uploadProject.single('heroImage');
 const uploadProjectFields = uploadProject.fields([
   { name: 'heroImage', maxCount: 1 },
   { name: 'gallery', maxCount: 20 },
-  { name: 'floorPlans', maxCount: 10 },
   { name: 'constructionProgress', maxCount: 20 },
   { name: 'designImages', maxCount: 20 },
   { name: 'brochure', maxCount: 10 }
@@ -338,7 +335,7 @@ const deleteFolder = (folderPath) => {
 // ==================== EXPORTS ====================
 
 export {
-  // Media uploads - CHO FEATURED IMAGE
+  // Media uploads
   uploadMedia,
   uploadMediaSingle,
   
@@ -347,13 +344,15 @@ export {
   uploadFolderSingle,
   uploadFolderArray,
   
-  // Project uploads
+  // Project uploads - ĐÃ LOẠI BỎ floorPlans
   uploadProject,
   uploadProjectSingle,
   uploadProjectFields,
-  //Rent upload 
+  
+  // Rent upload 
   uploadRentArray, 
   uploadRentImages, 
+  
   // Error handling
   handleMulterError,
   

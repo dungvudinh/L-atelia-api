@@ -156,6 +156,55 @@ const userController = {
         message: error.message
       });
     }
+  },
+  changeUserStatus: async (req, res) => {
+    try {
+      const { isActive } = req.body;
+      const user = await userService.changeUserStatus(req.params.id, isActive);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
+        data: user
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  },
+  bulkChangeStatus: async (req, res) => {
+    try {
+      const { userIds, isActive } = req.body;
+
+      if (!userIds || !Array.isArray(userIds)) {
+        return res.status(400).json({
+          success: false,
+          message: 'User IDs array is required'
+        });
+      }
+
+      const result = await userService.bulkChangeStatus(userIds, isActive);
+
+      res.json({
+        success: true,
+        message: `${result.modifiedCount} users ${isActive ? 'activated' : 'deactivated'} successfully`,
+        data: result
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
   }
 };
 

@@ -12,7 +12,7 @@ import initializeDatabase from './scripts/initialDatabase.js';
 const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
 
-const allowOrigins = ['http://localhost:5173'];
+const allowOrigins = ['http://localhost:5173', 'http://localhost:5174'];
 const app = express();
 
 const START_SERVER = () => {
@@ -29,7 +29,7 @@ const START_SERVER = () => {
             }
         },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH','OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'], 
     }));
     app.use(express.json());
