@@ -12,7 +12,7 @@ import initializeDatabase from './scripts/initialDatabase.js';
 const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
 
-const allowOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+const allowOrigins = ['http://localhost:5173', 'http://localhost:5174','https://latelia.store', 'https://admin.latelia.store' ];
 const app = express();
 
 const START_SERVER = () => {
