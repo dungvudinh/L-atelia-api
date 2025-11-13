@@ -2,6 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
+// ==================== LOCAL STORAGE (CHO DEVELOPMENT) ====================
 // Ensure upload directories exist
 const ensureUploadDirs = () => {
   const uploadDirs = [
@@ -10,7 +11,7 @@ const ensureUploadDirs = () => {
     'uploads/media',
     'uploads/projects/hero',
     'uploads/projects/gallery',
-    'uploads/projects/progress', // ĐÃ LOẠI BỎ floorplans
+    'uploads/projects/progress',
     'uploads/projects/design',
     'uploads/projects/brochures'
   ];
@@ -26,7 +27,12 @@ const ensureUploadDirs = () => {
 // Gọi hàm này ngay khi khởi động
 ensureUploadDirs();
 
-// ==================== MEDIA STORAGE (FEATURED IMAGE) ====================
+// ==================== STORAGE CONFIGURATIONS ====================
+
+// Memory storage cho Cloudinary
+const memoryStorage = multer.memoryStorage();
+
+// Local disk storage cho development
 const mediaStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
@@ -47,7 +53,6 @@ const mediaStorage = multer.diskStorage({
   }
 });
 
-// ==================== RENT STORAGE ====================
 const rentStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
@@ -74,7 +79,6 @@ const rentStorage = multer.diskStorage({
   }
 });
 
-// ==================== FOLDER STORAGE ====================
 const folderStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
@@ -103,7 +107,6 @@ const folderStorage = multer.diskStorage({
   }
 });
 
-// ==================== PROJECTS STORAGE ====================
 const projectStorage = multer.diskStorage({
   destination: function (req, file, cb) {
     ensureUploadDirs();
@@ -143,7 +146,8 @@ const projectStorage = multer.diskStorage({
   }
 });
 
-// File filter cho images
+// ==================== FILE FILTERS ====================
+
 const imageFileFilter = (req, file, cb) => {
   const allowedMimes = [
     'image/jpeg', 
@@ -161,7 +165,6 @@ const imageFileFilter = (req, file, cb) => {
   }
 };
 
-// File filter cho projects
 const projectFileFilter = (req, file, cb) => {
   const allowedMimes = [
     'image/jpeg', 
@@ -181,58 +184,30 @@ const projectFileFilter = (req, file, cb) => {
 
 // ==================== MULTER INSTANCES ====================
 
-// Media upload instances
-const uploadMedia = multer({
-  storage: mediaStorage,
-  fileFilter: imageFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-    files: 1
-  }
-});
+// Chọn storage dựa trên môi trường
+const getStorage = () => {
+  return process.env.USE_CLOUDINARY === 'true' ? memoryStorage : projectStorage;
+};
 
-const uploadRentImages = multer({
-  storage: rentStorage,
-  fileFilter: imageFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-    files: 20
-  }
-});
-
-// Folder upload instances
-const uploadFolderImages = multer({
-  storage: folderStorage,
-  fileFilter: imageFileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-    files: 20
-  }
-});
-
-// Project upload instances - ĐÃ LOẠI BỎ floorPlans
+// Project upload instances
 const uploadProject = multer({
-  storage: projectStorage,
+  storage: process.env.USE_CLOUDINARY === 'true' ? memoryStorage : projectStorage,
   fileFilter: projectFileFilter,
   limits: {
     fileSize: 10 * 1024 * 1024,
     files: 50
   }
 });
-
-const uploadRentArray = uploadRentImages.array('images', 20);
-
-// ==================== UPLOAD CONFIGURATIONS ====================
-
-// Media upload configurations
+const uploadMedia = multer({
+  storage: process.env.USE_CLOUDINARY === 'true' ? memoryStorage : mediaStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  }
+});
 const uploadMediaSingle = uploadMedia.single('featuredImage');
-
-// Folder upload configurations
-const uploadFolderSingle = uploadFolderImages.single('image');
-const uploadFolderArray = uploadFolderImages.array('images', 20);
-
-// Project upload configurations - ĐÃ LOẠI BỎ floorPlans
-const uploadProjectSingle = uploadProject.single('heroImage');
+// Project upload configurations
 const uploadProjectFields = uploadProject.fields([
   { name: 'heroImage', maxCount: 1 },
   { name: 'gallery', maxCount: 20 },
@@ -240,7 +215,26 @@ const uploadProjectFields = uploadProject.fields([
   { name: 'designImages', maxCount: 20 },
   { name: 'brochure', maxCount: 10 }
 ]);
+const uploadFolderImages = multer({
+  storage: process.env.USE_CLOUDINARY === 'true' ? memoryStorage : folderStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 20
+  }
+});
 
+const uploadFolderArray = uploadFolderImages.array('images', 20);
+const uploadRentImages = multer({
+  storage: process.env.USE_CLOUDINARY === 'true' ? memoryStorage : rentStorage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 20
+  }
+});
+
+const uploadRentArray = uploadRentImages.array('images', 20);
 // ==================== ERROR HANDLING MIDDLEWARE ====================
 
 const handleMulterError = (error, req, res, next) => {
@@ -335,28 +329,18 @@ const deleteFolder = (folderPath) => {
 // ==================== EXPORTS ====================
 
 export {
-  // Media uploads
-  uploadMedia,
-  uploadMediaSingle,
-  
-  // Folder uploads
-  uploadFolderImages,
-  uploadFolderSingle,
-  uploadFolderArray,
-  
-  // Project uploads - ĐÃ LOẠI BỎ floorPlans
+  // Multer instances
   uploadProject,
-  uploadProjectSingle,
   uploadProjectFields,
-  
-  // Rent upload 
-  uploadRentArray, 
-  uploadRentImages, 
-  
+  uploadMedia, 
+  uploadMediaSingle,
   // Error handling
   handleMulterError,
-  
-  // File utilities
+  uploadFolderImages,
+  uploadFolderArray,
+  uploadRentImages,
+  uploadRentArray,
+  // File utilities (cho local storage)
   deleteFolder,
   deleteFile,
   deleteFiles,

@@ -225,7 +225,31 @@ export const getMediaByStatusService = async (status) => {
     throw error;
   }
 };
+export const deleteFeaturedImage = async (imageUrl, filename = null) => {
+  try {
+    console.log('Deleting featured image:', { imageUrl, filename });
 
+    let url = '/v1/media/delete-featured-image';
+    let data = {};
+
+    // Nếu có imageUrl (Cloudinary), gửi qua body
+    if (imageUrl) {
+      data = { imageUrl };
+    } 
+    // Nếu có filename (local storage), thêm vào URL
+    else if (filename) {
+      url += `/${filename}`;
+    } else {
+      throw new Error('Either imageUrl or filename is required');
+    }
+
+    const response = await apiClient.delete(url, { data });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error in deleteFeaturedImage service:', error.message);
+    throw error;
+  }
+};
 // Export tất cả services
 const mediaService = {
   createMediaService,
@@ -235,7 +259,7 @@ const mediaService = {
   deleteMediaService,
   bulkDeleteMediaService,
   getMediaByCategoryService,
-  getMediaByStatusService
+  getMediaByStatusService,
 };
 
 export default mediaService;

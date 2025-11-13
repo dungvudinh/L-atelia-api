@@ -1,4 +1,3 @@
-// routes/rentRoute.js
 import express from 'express';
 import {
   getAllRentals,

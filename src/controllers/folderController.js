@@ -1,9 +1,10 @@
-// controllers/folderController.js
+import { StatusCodes } from "http-status-codes";
 import { Folder } from '../models/folderModel.js';
-import { deleteFile } from '../config/multer.js';
-import path from 'path';
-import { deleteFolder } from '../config/multer.js';
-import fs from 'fs'; // Thêm import fs
+import { 
+  uploadFolderFiles,
+  deleteFromCloudinaryByUrl,
+  deleteMultipleFromCloudinary
+} from '../config/cloudinary.js';
 
 // @desc    Create new folder
 // @route   POST /api/folders
@@ -12,7 +13,7 @@ export const createFolder = async (req, res) => {
     const { name, parentFolder } = req.body;
 
     if (!name || !name.trim()) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Folder name is required'
       });
@@ -25,7 +26,7 @@ export const createFolder = async (req, res) => {
     });
 
     if (existingFolder) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Folder name already exists'
       });
@@ -35,7 +36,7 @@ export const createFolder = async (req, res) => {
     if (parentFolder) {
       const parentExists = await Folder.findById(parentFolder);
       if (!parentExists) {
-        return res.status(400).json({
+        return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
           message: 'Parent folder not found'
         });
@@ -49,7 +50,7 @@ export const createFolder = async (req, res) => {
 
     const savedFolder = await folder.save();
 
-    res.status(201).json({
+    res.status(StatusCodes.CREATED).json({
       success: true,
       data: savedFolder,
       message: 'Folder created successfully'
@@ -57,7 +58,7 @@ export const createFolder = async (req, res) => {
 
   } catch (error) {
     console.error('Error in createFolder:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Server error',
       error: error.message
@@ -73,7 +74,7 @@ export const getFolders = async (req, res) => {
       .populate('parentFolder', 'name')
       .sort({ createdAt: -1 });
 
-    res.json({
+    res.status(StatusCodes.OK).json({
       success: true,
       data: folders,
       total: folders.length
@@ -81,7 +82,7 @@ export const getFolders = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getFolders:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Server error',
       error: error.message
@@ -97,20 +98,20 @@ export const getFolderById = async (req, res) => {
       .populate('parentFolder', 'name');
 
     if (!folder) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Folder not found'
       });
     }
 
-    res.json({
+    res.status(StatusCodes.OK).json({
       success: true,
       data: folder
     });
 
   } catch (error) {
     console.error('Error in getFolderById:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Server error',
       error: error.message
@@ -125,7 +126,7 @@ export const uploadImages = async (req, res) => {
     const { id } = req.params;
     
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'No files uploaded'
       });
@@ -133,47 +134,73 @@ export const uploadImages = async (req, res) => {
 
     const folder = await Folder.findById(id);
     if (!folder) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Folder not found'
       });
     }
 
-    const uploadedImages = [];
+    let uploadedImages = [];
 
-    for (const file of req.files) {
-      // Tạo URL truy cập ảnh
-      const imageUrl = `/uploads/folders/${id}/${file.filename}`;
-
-      const imageData = {
-        filename: file.filename,
-        originalName: file.originalname,
-        url: imageUrl,
-        size: file.size,
-        mimetype: file.mimetype
-      };
-
-      await folder.addImage(imageData);
+    if (process.env.USE_CLOUDINARY === 'true') {
+      // Upload lên Cloudinary
+      const cloudinaryResults = await uploadFolderFiles(req.files, id);
       
-      // Lấy ID của image vừa thêm
-      const newImage = folder.images[folder.images.length - 1];
-      uploadedImages.push({
-        _id: newImage._id,
-        ...imageData
-      });
+      uploadedImages = cloudinaryResults.map(result => ({
+        filename: result.publicId.split('/').pop(), // Lấy tên file từ publicId
+        originalName: req.files.find(f => f.originalname.includes(result.format))?.originalname || `image.${result.format}`,
+        url: result.url,
+        size: result.size,
+        mimetype: `image/${result.format}`,
+        cloudinaryPublicId: result.publicId
+      }));
+
+    } else {
+      // Local storage
+      for (const file of req.files) {
+        const imageUrl = `/uploads/folders/${id}/${file.filename}`;
+
+        const imageData = {
+          filename: file.filename,
+          originalName: file.originalname,
+          url: imageUrl,
+          size: file.size,
+          mimetype: file.mimetype
+        };
+
+        await folder.addImage(imageData);
+        
+        // Lấy ID của image vừa thêm
+        const newImage = folder.images[folder.images.length - 1];
+        uploadedImages.push({
+          _id: newImage._id,
+          ...imageData
+        });
+      }
     }
 
-    res.json({
+    // Lưu images vào folder
+    for (const image of uploadedImages) {
+      await folder.addImage(image);
+    }
+
+    // Lấy folder đã được cập nhật
+    const updatedFolder = await Folder.findById(id);
+
+    res.status(StatusCodes.OK).json({
       success: true,
-      data: uploadedImages,
+      data: {
+        folder: updatedFolder,
+        uploadedImages: uploadedImages
+      },
       message: `Successfully uploaded ${uploadedImages.length} images to folder`
     });
 
   } catch (error) {
     console.error('Error in uploadImages:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Server error',
+      message: 'Upload failed',
       error: error.message
     });
   }
@@ -188,7 +215,7 @@ export const updateFolder = async (req, res) => {
 
     const folder = await Folder.findById(id);
     if (!folder) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Folder not found'
       });
@@ -196,7 +223,7 @@ export const updateFolder = async (req, res) => {
 
     // Prevent circular reference
     if (parentFolder === id) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Cannot set folder as its own parent'
       });
@@ -206,7 +233,7 @@ export const updateFolder = async (req, res) => {
     if (parentFolder && parentFolder !== folder.parentFolder?.toString()) {
       const parentExists = await Folder.findById(parentFolder);
       if (!parentExists) {
-        return res.status(400).json({
+        return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
           message: 'Parent folder not found'
         });
@@ -222,7 +249,7 @@ export const updateFolder = async (req, res) => {
       });
 
       if (existingFolder) {
-        return res.status(400).json({
+        return res.status(StatusCodes.BAD_REQUEST).json({
           success: false,
           message: 'Folder name already exists in this location'
         });
@@ -238,7 +265,7 @@ export const updateFolder = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    res.json({
+    res.status(StatusCodes.OK).json({
       success: true,
       data: updatedFolder,
       message: 'Folder updated successfully'
@@ -246,7 +273,7 @@ export const updateFolder = async (req, res) => {
 
   } catch (error) {
     console.error('Error in updateFolder:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Server error',
       error: error.message
@@ -260,7 +287,7 @@ export const removeFolder = async (req, res) => {
   try {
     const folder = await Folder.findById(req.params.id);
     if (!folder) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Folder not found'
       });
@@ -268,30 +295,43 @@ export const removeFolder = async (req, res) => {
 
     // Check if folder has images
     if (folder.images.length > 0) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'Cannot delete folder that contains images. Please delete all images first.'
       });
     }
 
-    // Xóa thư mục vật lý nếu tồn tại - SỬA LẠI DÙNG fs thay vì require
-    const folderPath = `uploads/folders/${req.params.id}`;
-    deleteFolder(folderPath);
-    // if (fs.existsSync(folderPath)) {
-    //   fs.rmSync(folderPath, { recursive: true, force: true });
-    //   console.log(`🗑️ Deleted folder directory: ${folderPath}`);
-    // }
+    // Xóa images từ Cloudinary nếu có
+    if (process.env.USE_CLOUDINARY === 'true' && folder.images.length > 0) {
+      try {
+        const imageUrls = folder.images.map(img => img.url);
+        await deleteMultipleFromCloudinary(imageUrls);
+        console.log(`🗑️ Deleted ${imageUrls.length} images from Cloudinary for folder ${folder.name}`);
+      } catch (cloudinaryError) {
+        console.error('Error deleting images from Cloudinary:', cloudinaryError);
+      }
+    }
+
+    // Xóa thư mục vật lý nếu dùng local storage
+    if (process.env.USE_CLOUDINARY !== 'true') {
+      const fs = await import('fs');
+      const folderPath = `uploads/folders/${req.params.id}`;
+      if (fs.existsSync(folderPath)) {
+        fs.rmSync(folderPath, { recursive: true, force: true });
+        console.log(`🗑️ Deleted folder directory: ${folderPath}`);
+      }
+    }
 
     await Folder.findByIdAndDelete(req.params.id);
 
-    res.json({
+    res.status(StatusCodes.OK).json({
       success: true,
       message: 'Folder deleted successfully'
     });
 
   } catch (error) {
     console.error('Error in removeFolder:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Server error',
       error: error.message
@@ -307,7 +347,7 @@ export const deleteImage = async (req, res) => {
 
     const folder = await Folder.findById(folderId);
     if (!folder) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Folder not found'
       });
@@ -316,29 +356,40 @@ export const deleteImage = async (req, res) => {
     // Tìm ảnh cần xóa
     const imageToDelete = folder.images.id(imageId);
     if (!imageToDelete) {
-      return res.status(404).json({
+      return res.status(StatusCodes.NOT_FOUND).json({
         success: false,
         message: 'Image not found in folder'
       });
     }
 
-    // Xóa file vật lý
-    const filePath = path.join('uploads', 'folders', folderId, imageToDelete.filename);
-    deleteFile(filePath);
+    // Xóa file từ Cloudinary hoặc local
+    if (process.env.USE_CLOUDINARY === 'true') {
+      if (imageToDelete.url) {
+        await deleteFromCloudinaryByUrl(imageToDelete.url);
+      }
+    } else {
+      // Local storage
+      const fs = await import('fs');
+      const path = await import('path');
+      const filePath = path.join('uploads', 'folders', folderId, imageToDelete.filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
 
     // Xóa ảnh khỏi folder trong database
     await folder.removeImage(imageId);
 
-    res.json({
+    res.status(StatusCodes.OK).json({
       success: true,
       message: 'Image deleted successfully'
     });
 
   } catch (error) {
     console.error('Error in deleteImage:', error);
-    res.status(500).json({
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Server error',
+      message: 'Delete failed',
       error: error.message
     });
   }

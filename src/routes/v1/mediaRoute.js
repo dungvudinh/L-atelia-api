@@ -15,6 +15,8 @@ const router = express.Router();
 
 // Route upload ảnh đại diện
 router.post('/upload-featured-image', uploadMediaSingle, handleMulterError, uploadFeaturedImage);
+
+// SỬA: Xóa parameter :filename? vì controller chỉ nhận qua body
 router.delete('/delete-featured-image/:filename', deleteFeaturedImage);
 
 // Các route hiện có
