@@ -10,7 +10,6 @@ import {
 // @route   POST /api/media/upload-featured-image
 export const uploadFeaturedImage = async (req, res) => {
   try {
-    console.log('upload featured image')
     if (!req.file) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
@@ -31,7 +30,6 @@ export const uploadFeaturedImage = async (req, res) => {
         filename: req.file.filename,
         path: relativePath
       };
-      console.log(uploadResult)
     }
 
     res.status(StatusCodes.OK).json({
@@ -52,31 +50,56 @@ export const uploadFeaturedImage = async (req, res) => {
 
 // @desc    Delete featured image from Cloudinary
 // @route   DELETE /api/media/delete-featured-image
+// mediaController.js
 export const deleteFeaturedImage = async (req, res) => {
   try {
-    const { filename } = req.params;
+    console.log('=== DELETE FEATURED IMAGE ===');
+    const { imageUrl, filename } = req.body;
 
-    if (!filename) {
+    console.log('ImageUrl from body:', imageUrl);
+    console.log('Filename from body:', filename);
+
+    if (!imageUrl && !filename) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: 'Filename is required'
+        message: 'Either imageUrl or filename is required'
       });
     }
 
     if (process.env.USE_CLOUDINARY === 'true') {
-      // Với Cloudinary, cần có imageUrl thay vì filename
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: 'For Cloudinary, please use imageUrl in request body instead of filename'
-      });
+      // Cloudinary - sử dụng imageUrl
+      if (!imageUrl) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: 'imageUrl is required for Cloudinary'
+        });
+      }
+      
+      await deleteFromCloudinaryByUrl(imageUrl);
+      console.log('✅ Deleted from Cloudinary:', imageUrl);
+      
     } else {
-      // Local storage - xóa file từ server
+      // Local storage - sử dụng filename
+      let fileToDelete = filename;
+      
+      // Nếu có imageUrl nhưng không có filename, extract từ imageUrl
+      if (!fileToDelete && imageUrl) {
+        fileToDelete = imageUrl.split('/').pop();
+      }
+      
+      if (!fileToDelete) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: 'Filename is required for local storage'
+        });
+      }
+      
       const fs = await import('fs');
       const path = await import('path');
       
       const __dirname = path.resolve();
       const uploadsDir = path.join(__dirname, 'uploads/media');
-      const filePath = path.join(uploadsDir, filename);
+      const filePath = path.join(uploadsDir, fileToDelete);
 
       console.log('Deleting file from path:', filePath);
 

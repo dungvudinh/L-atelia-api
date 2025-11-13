@@ -161,7 +161,21 @@ const uploadRentFiles = async (files) => {
 const uploadFolderFiles = async (files, folderId) => {
   return await uploadMultipleToCloudinary(files, `latelia/folders/${folderId}`);
 };
-
+const deleteFromCloudinaryByUrl = async (url) => {
+  try {
+    const publicId = getPublicIdFromUrl(url);
+    if (!publicId) {
+      throw new Error('Invalid Cloudinary URL');
+    }
+    
+    const result = await deleteFromCloudinary(publicId);
+    console.log(`✅ Deleted from Cloudinary: ${publicId}`);
+    return result;
+  } catch (error) {
+    console.error('❌ Error deleting from Cloudinary:', error.message);
+    throw error;
+  }
+};
 /**
  * Delete multiple files from Cloudinary by URLs
  */
@@ -231,5 +245,6 @@ export {
   uploadFolderFiles,
   uploadSingleToCloudinary,
   uploadMultipleToCloudinary,
-  deleteMultipleFromCloudinary
+  deleteMultipleFromCloudinary,
+  deleteFromCloudinaryByUrl
 };

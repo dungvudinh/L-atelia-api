@@ -45,4 +45,5 @@ router.patch('/:id/status', updateRentalStatus);
 // TOGGLE FEATURED
 router.patch('/:id/featured', toggleFeatured);
 
+
 export default router;
