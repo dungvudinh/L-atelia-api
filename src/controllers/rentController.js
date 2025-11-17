@@ -62,6 +62,10 @@ export const createRental = async (req, res) => {
     const rentalData = req.body;
     
     // Parse array fields from string to array
+    if (rentalData.beds && !rentalData.adultBeds) {
+      rentalData.adultBeds = rentalData.beds;
+      delete rentalData.beds;
+    }
     if (rentalData.highlights && typeof rentalData.highlights === 'string') {
       rentalData.highlights = JSON.parse(rentalData.highlights);
     }
@@ -98,7 +102,10 @@ export const updateRental = async (req, res) => {
   try {
     const { id } = req.params;
     const rentalData = req.body;
-    
+    if (rentalData.beds && !rentalData.adultBeds) {
+      rentalData.adultBeds = rentalData.beds;
+      delete rentalData.beds;
+    }
     // Parse array fields from string to array
     if (rentalData.highlights && typeof rentalData.highlights === 'string') {
       rentalData.highlights = JSON.parse(rentalData.highlights);

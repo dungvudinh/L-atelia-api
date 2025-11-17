@@ -20,6 +20,12 @@ const specialSectionSchema = new mongoose.Schema({
   isExpandable: { type: Boolean, default: true }
 }, { _id: true });
 
+// Schema cho image với uploaded_at
+const imageSchema = new mongoose.Schema({
+  url: { type: String, required: true },
+  uploaded_at: { type: Date, default: Date.now }
+}, { _id: true });
+
 const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
@@ -30,12 +36,15 @@ const projectSchema = new mongoose.Schema({
   },
   location: String,
   
-  // Images - ĐÃ LOẠI BỎ floorPlans
-  heroImage: String,
-  gallery: [String],
-  constructionProgress: [String],
-  designImages: [String],
-  brochure: [String],
+  // Images - ĐÃ LOẠI BỎ floorPlans, THÊM uploaded_at
+  heroImage: {
+    type: imageSchema,
+    default: null
+  },
+  gallery: [imageSchema],
+  constructionProgress: [imageSchema], // 👈 ĐÃ THÊM uploaded_at
+  designImages: [imageSchema],
+  brochure: [imageSchema],
 
   // Property Information
   propertyFeatures: [{

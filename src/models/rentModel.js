@@ -86,9 +86,14 @@ const rentSchema = new mongoose.Schema({
     },
     default: 'per night'
   },
-  beds: {
+  adultBeds: {
     type: Number,
-    min: [0, 'Beds cannot be negative'],
+    min: [0, 'Adult beds cannot be negative'],
+    default: 0
+  },
+  childBeds: {
+    type: Number,
+    min: [0, 'Child beds cannot be negative'],
     default: 0
   },
   bedrooms: {

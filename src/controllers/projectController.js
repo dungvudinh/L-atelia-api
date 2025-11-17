@@ -57,18 +57,35 @@ export const createProject = async (req, res, next) => {
       ...projectData
     };
 
-    // Thêm image URLs vào project data
+    // Thêm image URLs vào project data DƯỚI DẠNG OBJECT {url, uploaded_at}
     if (process.env.USE_CLOUDINARY === 'true') {
-      // Cloudinary - sử dụng URLs
+      // Cloudinary - sử dụng URLs và thêm uploaded_at
+      const currentDate = new Date();
+      
       projectToCreate.images = {
-        heroImage: uploadedFiles.heroImage ? uploadedFiles.heroImage.url : null,
-        gallery: uploadedFiles.gallery ? uploadedFiles.gallery.map(img => img.url) : [],
-        constructionProgress: uploadedFiles.constructionProgress ? uploadedFiles.constructionProgress.map(img => img.url) : [],
-        designImages: uploadedFiles.designImages ? uploadedFiles.designImages.map(img => img.url) : [],
-        brochure: uploadedFiles.brochure ? uploadedFiles.brochure.map(doc => doc.url) : []
+        heroImage: uploadedFiles.heroImage ? {
+          url: uploadedFiles.heroImage.url,
+          uploaded_at: currentDate
+        } : null,
+        gallery: uploadedFiles.gallery ? uploadedFiles.gallery.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        })) : [],
+        constructionProgress: uploadedFiles.constructionProgress ? uploadedFiles.constructionProgress.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        })) : [],
+        designImages: uploadedFiles.designImages ? uploadedFiles.designImages.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        })) : [],
+        brochure: uploadedFiles.brochure ? uploadedFiles.brochure.map(doc => ({
+          url: doc.url,
+          uploaded_at: currentDate
+        })) : []
       };
     } else {
-      // Local storage - giữ nguyên file objects
+      // Local storage - giữ nguyên file objects (sẽ được convert trong service)
       projectToCreate.files = uploadedFiles;
     }
 
@@ -184,13 +201,40 @@ export const update = async (req, res, next) => {
       _hasNewFiles: Object.keys(uploadedFiles).length > 0
     };
 
-    // Thêm files mới vào update data
+    // Thêm files mới vào update data DƯỚI DẠNG OBJECT {url, uploaded_at}
     if (process.env.USE_CLOUDINARY === 'true') {
-      if (uploadedFiles.heroImage) projectToUpdate.heroImage = uploadedFiles.heroImage.url;
-      if (uploadedFiles.gallery) projectToUpdate.gallery = uploadedFiles.gallery.map(img => img.url);
-      if (uploadedFiles.constructionProgress) projectToUpdate.constructionProgress = uploadedFiles.constructionProgress.map(img => img.url);
-      if (uploadedFiles.designImages) projectToUpdate.designImages = uploadedFiles.designImages.map(img => img.url);
-      if (uploadedFiles.brochure) projectToUpdate.brochure = uploadedFiles.brochure.map(doc => doc.url);
+      const currentDate = new Date();
+      
+      if (uploadedFiles.heroImage) {
+        projectToUpdate.heroImage = {
+          url: uploadedFiles.heroImage.url,
+          uploaded_at: currentDate
+        };
+      }
+      if (uploadedFiles.gallery) {
+        projectToUpdate.gallery = uploadedFiles.gallery.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        }));
+      }
+      if (uploadedFiles.constructionProgress) {
+        projectToUpdate.constructionProgress = uploadedFiles.constructionProgress.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        }));
+      }
+      if (uploadedFiles.designImages) {
+        projectToUpdate.designImages = uploadedFiles.designImages.map(img => ({
+          url: img.url,
+          uploaded_at: currentDate
+        }));
+      }
+      if (uploadedFiles.brochure) {
+        projectToUpdate.brochure = uploadedFiles.brochure.map(doc => ({
+          url: doc.url,
+          uploaded_at: currentDate
+        }));
+      }
     } else {
       projectToUpdate.files = uploadedFiles;
     }
@@ -223,11 +267,21 @@ export const remove = async (req, res, next) => {
       try {
         const urlsToDelete = [];
         
-        if (project.heroImage) urlsToDelete.push(project.heroImage);
-        if (project.gallery && project.gallery.length > 0) urlsToDelete.push(...project.gallery);
-        if (project.constructionProgress && project.constructionProgress.length > 0) urlsToDelete.push(...project.constructionProgress);
-        if (project.designImages && project.designImages.length > 0) urlsToDelete.push(...project.designImages);
-        if (project.brochure && project.brochure.length > 0) urlsToDelete.push(...project.brochure);
+        // Hàm extract URL từ image object
+        const extractUrl = (imageField) => {
+          if (Array.isArray(imageField)) {
+            return imageField.map(item => item.url);
+          } else if (imageField && imageField.url) {
+            return [imageField.url];
+          }
+          return [];
+        };
+        
+        if (project.heroImage) urlsToDelete.push(...extractUrl(project.heroImage));
+        if (project.gallery) urlsToDelete.push(...extractUrl(project.gallery));
+        if (project.constructionProgress) urlsToDelete.push(...extractUrl(project.constructionProgress));
+        if (project.designImages) urlsToDelete.push(...extractUrl(project.designImages));
+        if (project.brochure) urlsToDelete.push(...extractUrl(project.brochure));
         
         if (urlsToDelete.length > 0) {
           await deleteMultipleFromCloudinary(urlsToDelete);
@@ -261,8 +315,13 @@ export const deleteImages = async (req, res, next) => {
     // Xóa images từ Cloudinary nếu đang sử dụng
     if (process.env.USE_CLOUDINARY === 'true') {
       try {
-        await deleteMultipleFromCloudinary(imageUrls);
-        console.log(`🗑️ Deleted ${imageUrls.length} ${imageType} images from Cloudinary`);
+        // Extract URLs từ image objects
+        const urlsToDelete = imageUrls.map(url => 
+          typeof url === 'object' ? url.url : url
+        );
+        
+        await deleteMultipleFromCloudinary(urlsToDelete);
+        console.log(`🗑️ Deleted ${urlsToDelete.length} ${imageType} images from Cloudinary`);
       } catch (cloudinaryError) {
         console.error('Error deleting images from Cloudinary:', cloudinaryError);
         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({

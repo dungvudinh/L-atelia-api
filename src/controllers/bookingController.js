@@ -3,14 +3,18 @@ import bookingService from '../services/bookingService.js';
 
 export const getAllBookings = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, status, paymentStatus } = req.query;
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      status
+    } = req.query;
     
     const result = await bookingService.getAllBookings({
       page: parseInt(page),
       limit: parseInt(limit),
       search,
-      status,
-      paymentStatus
+      status
     });
     
     res.json({
@@ -27,17 +31,110 @@ export const getAllBookings = async (req, res) => {
   }
 };
 
+export const createBooking = async (req, res) => {
+  try {
+    const bookingData = req.body;
+    
+    console.log('📥 Received booking request:', {
+      propertyId: bookingData.propertyId,
+      checkIn: bookingData.checkIn,
+      checkOut: bookingData.checkOut,
+      customer: bookingData.customer?.email
+    });
+
+    // Set default dates nếu không có
+    if (!bookingData.checkIn || !bookingData.checkOut) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const threeDaysLater = new Date();
+      threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+      
+      bookingData.checkIn = bookingData.checkIn || tomorrow;
+      bookingData.checkOut = bookingData.checkOut || threeDaysLater;
+      
+      console.log('🕐 Set default dates:', {
+        checkIn: bookingData.checkIn,
+        checkOut: bookingData.checkOut
+      });
+    }
+    
+    // Luôn set status là pending cho booking từ contact form
+    bookingData.status = 'pending';
+    bookingData.paymentStatus = 'pending';
+
+    // Check property availability (CHỈ kiểm tra confirmed bookings)
+    if (bookingData.checkIn && bookingData.checkOut) {
+      console.log('🔍 Checking availability...');
+      
+      const availability = await bookingService.checkAvailability(
+        bookingData.propertyId,
+        bookingData.checkIn,
+        bookingData.checkOut
+      );
+      
+      console.log('📊 Availability result:', {
+        success: availability.success,
+        available: availability.data?.available,
+        conflictingBookings: availability.data?.conflictingBookings?.length || 0
+      });
+      
+      // Nếu có lỗi khi check availability
+      if (!availability.success) {
+        console.error('❌ Availability check failed:', availability.message);
+        return res.status(400).json({
+          success: false,
+          message: availability.message || 'Error checking property availability'
+        });
+      }
+      
+      // CHỈ block nếu có confirmed booking trùng
+      // Vẫn cho phép tạo pending booking ngay cả khi có pending khác
+      if (!availability.data.available) {
+        console.warn('⚠️ Property not available - conflicting with confirmed booking');
+        return res.status(400).json({
+          success: false,
+          message: 'Property is not available for the selected dates (already booked)',
+          data: {
+            available: false,
+            conflictingBookings: availability.data.conflictingBookings,
+            suggestedDates: getSuggestedDates(availability.data.conflictingBookings)
+          }
+        });
+      }
+      
+      console.log('✅ Property available for booking');
+    }
+    
+    // Tạo booking mới (có thể có nhiều pending bookings cùng lúc)
+    console.log('🔄 Creating new booking...');
+    const newBooking = await bookingService.createBooking(bookingData);
+    
+    console.log('✅ Booking created successfully:', {
+      bookingNumber: newBooking.bookingNumber,
+      status: newBooking.status,
+      customer: newBooking.customer.email
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: 'Booking request submitted successfully',
+      data: newBooking
+    });
+    
+  } catch (error) {
+    console.error('❌ Create booking error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to create booking request'
+    });
+  }
+};
+
 export const getBookingById = async (req, res) => {
   try {
     const { id } = req.params;
     const booking = await bookingService.getBookingById(id);
-    
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
     
     res.json({
       success: true,
@@ -45,43 +142,9 @@ export const getBookingById = async (req, res) => {
     });
   } catch (error) {
     console.error('Get booking by id error:', error);
-    res.status(500).json({
+    res.status(404).json({
       success: false,
       message: error.message || 'Failed to fetch booking'
-    });
-  }
-};
-
-export const createBooking = async (req, res) => {
-  try {
-    const bookingData = req.body;
-    
-    // Check property availability
-    const availability = await bookingService.checkAvailability(
-      bookingData.propertyId,
-      bookingData.checkIn,
-      bookingData.checkOut
-    );
-    
-    if (!availability.success || !availability.data.available) {
-      return res.status(400).json({
-        success: false,
-        message: 'Property is not available for the selected dates'
-      });
-    }
-    
-    const newBooking = await bookingService.createBooking(bookingData);
-    
-    res.status(201).json({
-      success: true,
-      message: 'Booking created successfully',
-      data: newBooking
-    });
-  } catch (error) {
-    console.error('Create booking error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message || 'Failed to create booking'
     });
   }
 };
@@ -90,24 +153,6 @@ export const updateBooking = async (req, res) => {
   try {
     const { id } = req.params;
     const bookingData = req.body;
-    
-    // If dates are being updated, check availability (excluding current booking)
-    if (bookingData.checkIn || bookingData.checkOut) {
-      const existingBooking = await bookingService.getBookingById(id);
-      const availability = await bookingService.checkAvailability(
-        bookingData.propertyId || existingBooking.propertyId,
-        bookingData.checkIn || existingBooking.checkIn,
-        bookingData.checkOut || existingBooking.checkOut,
-        id
-      );
-      
-      if (!availability.success || !availability.data.available) {
-        return res.status(400).json({
-          success: false,
-          message: 'Property is not available for the selected dates'
-        });
-      }
-    }
     
     const updatedBooking = await bookingService.updateBooking(id, bookingData);
     
@@ -147,7 +192,7 @@ export const deleteBooking = async (req, res) => {
 export const checkAvailability = async (req, res) => {
   try {
     const { propertyId, checkIn, checkOut, excludeBookingId } = req.query;
-    
+   
     if (!propertyId || !checkIn || !checkOut) {
       return res.status(400).json({
         success: false,
@@ -177,6 +222,13 @@ export const updateBookingStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+    
     const updatedBooking = await bookingService.updateBookingStatus(id, status);
     
     res.json({
@@ -189,60 +241,6 @@ export const updateBookingStatus = async (req, res) => {
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to update booking status'
-    });
-  }
-};
-
-export const updatePaymentStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paymentStatus } = req.body;
-    
-    const updatedBooking = await bookingService.updatePaymentStatus(id, paymentStatus);
-    
-    res.json({
-      success: true,
-      message: 'Payment status updated successfully',
-      data: updatedBooking
-    });
-  } catch (error) {
-    console.error('Update payment status error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message || 'Failed to update payment status'
-    });
-  }
-};
-
-export const sendBookingEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { emailType } = req.body;
-    
-    // In a real application, you would integrate with an email service
-    // For now, we'll just simulate sending an email
-    
-    const booking = await bookingService.getBookingById(id);
-    
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-    
-    // Simulate email sending
-    console.log(`Sending ${emailType} email to ${booking.customer.email}`);
-    
-    res.json({
-      success: true,
-      message: `${emailType} email sent successfully to ${booking.customer.email}`
-    });
-  } catch (error) {
-    console.error('Send booking email error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message || 'Failed to send email'
     });
   }
 };

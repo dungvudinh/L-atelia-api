@@ -9,18 +9,30 @@ import {
   checkAvailability,
   updateBookingStatus,
   updatePaymentStatus,
-  sendBookingEmail
+  // getBookingsByProperty,
+  // getUpcomingBookings,
+  // getBookingStats
 } from '../../controllers/bookingController.js';
 
 const router = express.Router();
 
-// GET ALL BOOKINGS
+// GET ALL BOOKINGS with advanced filtering
 router.get('/', getAllBookings);
 
+// GET BOOKING STATISTICS
+// router.get('/stats', getBookingStats);
+
+// GET UPCOMING BOOKINGS
+// router.get('/upcoming', getUpcomingBookings);
+
+// GET BOOKINGS BY PROPERTY
+// router.get('/property/:propertyId', getBookingsByProperty);
+// CHECK AVAILABILITY
+router.get('/check-availability', checkAvailability);
 // GET BOOKING BY ID
 router.get('/:id', getBookingById);
 
-// CREATE NEW BOOKING
+// CREATE NEW BOOKING (including from contact form)
 router.post('/', createBooking);
 
 // UPDATE BOOKING
@@ -29,16 +41,14 @@ router.put('/:id', updateBooking);
 // DELETE BOOKING
 router.delete('/:id', deleteBooking);
 
-// CHECK AVAILABILITY
-router.get('/check-availability', checkAvailability);
+
 
 // UPDATE BOOKING STATUS
 router.patch('/:id/status', updateBookingStatus);
 
 // UPDATE PAYMENT STATUS
-router.patch('/:id/payment-status', updatePaymentStatus);
+// router.patch('/:id/payment-status', updatePaymentStatus);
 
-// SEND BOOKING EMAIL
-router.post('/:id/send-email', sendBookingEmail);
+// ĐÃ LOẠI BỎ SEND BOOKING EMAIL
 
 export default router;

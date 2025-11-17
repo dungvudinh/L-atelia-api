@@ -5,23 +5,17 @@ const customerSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Customer name is required'],
-    trim: true,
-    maxlength: [100, 'Name cannot exceed 100 characters']
+    trim: true
   },
   email: {
     type: String,
     required: [true, 'Customer email is required'],
     trim: true,
-    lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
+    lowercase: true
   },
   phone: {
     type: String,
     required: [true, 'Customer phone is required'],
-    trim: true
-  },
-  address: {
-    type: String,
     trim: true
   }
 });
@@ -30,96 +24,66 @@ const bookingSchema = new mongoose.Schema({
   bookingNumber: {
     type: String,
     required: true,
-    unique: true,
-    trim: true
+    unique: true
   },
   propertyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Rent',
-    required: [true, 'Property ID is required']
+    required: true
   },
   customer: customerSchema,
   checkIn: {
     type: Date,
-    required: [true, 'Check-in date is required'],
-    validate: {
-      validator: function(value) {
-        return value > new Date();
-      },
-      message: 'Check-in date must be in the future'
-    }
+    required: true
   },
   checkOut: {
     type: Date,
-    required: [true, 'Check-out date is required'],
-    validate: {
-      validator: function(value) {
-        return value > this.checkIn;
-      },
-      message: 'Check-out date must be after check-in date'
-    }
+    required: true
   },
-  guests: {
+  // Đơn giản: chỉ lưu adults và children
+  adults: {
     type: Number,
-    required: [true, 'Number of guests is required'],
-    min: [1, 'At least 1 guest is required'],
-    max: [20, 'Maximum 20 guests allowed']
+    required: true,
+    min: 1,
+    max: 10,
+    default: 1
+  },
+  children: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 5,
+    default: 0
   },
   totalAmount: {
     type: Number,
-    required: [true, 'Total amount is required'],
-    min: [0, 'Total amount cannot be negative']
+    required: true,
+    min: 0
   },
   status: {
     type: String,
-    enum: {
-      values: ['pending', 'confirmed', 'cancelled', 'completed'],
-      message: 'Status must be one of: pending, confirmed, cancelled, completed'
-    },
+    enum: ['pending', 'confirmed', 'cancelled', 'completed'],
     default: 'pending'
   },
   paymentStatus: {
     type: String,
-    enum: {
-      values: ['pending', 'partial', 'paid', 'refunded'],
-      message: 'Payment status must be one of: pending, partial, paid, refunded'
-    },
+    enum: ['pending', 'paid', 'refunded'],
     default: 'pending'
   },
   specialRequests: {
     type: String,
-    trim: true,
-    maxlength: [1000, 'Special requests cannot exceed 1000 characters']
-  },
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Notes cannot exceed 1000 characters']
+    trim: true
   }
 }, {
   timestamps: true
 });
 
-// Calculate total amount before saving
-bookingSchema.pre('save', function(next) {
-  if (this.isModified('checkIn') || this.isModified('checkOut') || this.isModified('propertyId')) {
-    this.calculateTotalAmount();
-  }
-  next();
+// Virtual để tính tổng guests
+bookingSchema.virtual('totalGuests').get(function() {
+  return this.adults + this.children;
 });
 
-// Instance method to calculate total amount
-bookingSchema.methods.calculateTotalAmount = async function() {
-  if (this.propertyId && this.checkIn && this.checkOut) {
-    const property = await mongoose.model('Rent').findById(this.propertyId);
-    if (property) {
-      const nights = Math.ceil((this.checkOut - this.checkIn) / (1000 * 60 * 60 * 24));
-      this.totalAmount = nights * property.price;
-    }
-  }
-};
-
-// Virtual for number of nights
+// Virtual để tính số đêm
 bookingSchema.virtual('nights').get(function() {
   if (this.checkIn && this.checkOut) {
     return Math.ceil((this.checkOut - this.checkIn) / (1000 * 60 * 60 * 24));
@@ -127,25 +91,9 @@ bookingSchema.virtual('nights').get(function() {
   return 0;
 });
 
-// Index for better search performance
-bookingSchema.index({ bookingNumber: 'text', 'customer.name': 'text', 'customer.email': 'text' });
+// Indexes
+bookingSchema.index({ bookingNumber: 'text' });
 bookingSchema.index({ propertyId: 1 });
 bookingSchema.index({ status: 1 });
-bookingSchema.index({ paymentStatus: 1 });
-bookingSchema.index({ checkIn: 1, checkOut: 1 });
-bookingSchema.index({ createdAt: -1 });
-
-// Static method to get bookings by property
-bookingSchema.statics.getBookingsByProperty = function(propertyId) {
-  return this.find({ propertyId }).sort({ checkIn: 1 });
-};
-
-// Static method to get upcoming bookings
-bookingSchema.statics.getUpcomingBookings = function() {
-  return this.find({ 
-    checkIn: { $gte: new Date() },
-    status: { $in: ['pending', 'confirmed'] }
-  }).sort({ checkIn: 1 });
-};
 
 export default mongoose.model('Booking', bookingSchema);
