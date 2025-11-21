@@ -2,7 +2,7 @@
 import Booking from '../models/bookingModel.js';
 import Rent from '../models/rentModel.js';
 import { generateBookingNumber } from '../utils/helpers.js';
-
+import emailService from './emailService.js';
 export const getAllBookings = async (filters = {}) => {
   try {
     const { 
@@ -202,7 +202,45 @@ export const updateBookingStatus = async (id, status) => {
     throw error;
   }
 };
+export const sendBookingEmail = async (bookingId, emailType, changes = []) => {
+  try {
+    const booking = await Booking.findById(bookingId).populate('propertyId');
+    if (!booking) {
+      throw new Error('Booking not found');
+    }
 
+    let result;
+    switch (emailType) {
+      case 'confirmation':
+        result = await emailService.sendBookingConfirmation(booking, booking.propertyId);
+        break;
+      case 'update':
+        result = await emailService.sendBookingUpdate(booking, booking.propertyId, changes);
+        break;
+      case 'cancellation':
+        result = await emailService.sendBookingCancellation(booking, booking.propertyId);
+        break;
+      default:
+        throw new Error('Invalid email type');
+    }
+
+    // Log email activity
+    await Booking.findByIdAndUpdate(bookingId, {
+      $push: {
+        emailLogs: {
+          type: emailType,
+          sentAt: new Date(),
+          messageId: result.messageId
+        }
+      }
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Send booking email error:', error);
+    throw error;
+  }
+};
 const bookingService = {
   getAllBookings,
   getBookingById,
@@ -210,7 +248,8 @@ const bookingService = {
   updateBooking,
   deleteBooking,
   checkAvailability,
-  updateBookingStatus
+  updateBookingStatus, 
+  sendBookingEmail
 };
 
 export default bookingService;

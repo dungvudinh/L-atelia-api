@@ -9,6 +9,7 @@ import {
   checkAvailability,
   updateBookingStatus,
   updatePaymentStatus,
+  sendBookingEmail // THÊM DÒNG NÀY
   // getBookingsByProperty,
   // getUpcomingBookings,
   // getBookingStats
@@ -27,8 +28,10 @@ router.get('/', getAllBookings);
 
 // GET BOOKINGS BY PROPERTY
 // router.get('/property/:propertyId', getBookingsByProperty);
+
 // CHECK AVAILABILITY
 router.get('/check-availability', checkAvailability);
+
 // GET BOOKING BY ID
 router.get('/:id', getBookingById);
 
@@ -41,14 +44,13 @@ router.put('/:id', updateBooking);
 // DELETE BOOKING
 router.delete('/:id', deleteBooking);
 
-
-
 // UPDATE BOOKING STATUS
 router.patch('/:id/status', updateBookingStatus);
 
 // UPDATE PAYMENT STATUS
 // router.patch('/:id/payment-status', updatePaymentStatus);
 
-// ĐÃ LOẠI BỎ SEND BOOKING EMAIL
+// SEND BOOKING EMAIL - THÊM ROUTE NÀY
+router.post('/:id/send-email', sendBookingEmail);
 
 export default router;

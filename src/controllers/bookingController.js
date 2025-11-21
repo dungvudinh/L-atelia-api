@@ -244,3 +244,31 @@ export const updateBookingStatus = async (req, res) => {
     });
   }
 };
+// controllers/bookingController.js - THÊM hàm gửi email
+export const sendBookingEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { emailType, changes = [] } = req.body;
+
+    if (!emailType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email type is required'
+      });
+    }
+
+    const result = await bookingService.sendBookingEmail(id, emailType, changes);
+    
+    res.json({
+      success: true,
+      message: 'Email sent successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Send booking email error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to send email'
+    });
+  }
+};

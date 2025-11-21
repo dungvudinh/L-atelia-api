@@ -73,7 +73,19 @@ const bookingSchema = new mongoose.Schema({
   specialRequests: {
     type: String,
     trim: true
-  }
+  },
+  emailLogs: [{
+    type: {
+      type: String,
+      enum: ['confirmation', 'update', 'cancellation'],
+      required: true
+    },
+    sentAt: {
+      type: Date,
+      default: Date.now
+    },
+    messageId: String
+  }]
 }, {
   timestamps: true
 });

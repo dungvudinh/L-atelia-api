@@ -87,7 +87,7 @@ export const getMediaService = async (filters = {}) => {
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
-
+    console.log('MEDIA', media)
     const total = await Media.countDocuments(query);
 
     return {

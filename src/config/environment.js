@@ -24,5 +24,12 @@ export const env = {
     PROD_FRONT_URL: process.env.PROD_FRONT_URL,
     DEV_BACK_URL: process.env.DEV_BACK_URL, 
     PROD_BACK_URL: process.env.PROD_BACK_URL, 
-    
+    SMTP_HOST:process.env.SMTP_HOST, 
+    SMTP_PORT: process.env.SMTP_PORT, 
+    SMTP_USER:process.env.SMTP_USER, 
+    SMTP_PASS:process.env.SMTP_PASS, 
+    EMAIL_FROM_NAME:process.env.EMAIL_FROM_NAME, 
+    COMPANY_NAME: process.env.COMPANY_NAME, 
+    CONTACT_EMAIL:process.env.CONTACT_EMAIL, 
+    SMTP_FROM:process.env.SMTP_FROM
 }

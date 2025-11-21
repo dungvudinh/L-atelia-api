@@ -199,7 +199,7 @@ export const getMedia = async (req, res) => {
       category,
       search
     });
-
+    console.log(result)
     res.status(StatusCodes.OK).json({
       success: true,
       data: result.media,
