@@ -1,5 +1,5 @@
-// services/mediaService.js
 import { Media } from '../models/mediaModel.js';
+import { deleteMultipleFromB2 } from '../config/b2.js';
 
 // Service để tạo media mới
 export const createMediaService = async (mediaData) => {
@@ -36,9 +36,34 @@ export const createMediaService = async (mediaData) => {
       excerpt: excerpt || '',
       category: category || 'lifestyle',
       status: status || 'draft',
-      featuredImage: featuredImage || '',
-      tags: processedTags
+      tags: processedTags,
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
+
+    // Xử lý featured image từ B2
+    if (featuredImage) {
+      if (typeof featuredImage === 'object' && featuredImage.url) {
+        media.featuredImage = {
+          url: featuredImage.url,
+          key: featuredImage.key,
+          filename: featuredImage.filename,
+          size: featuredImage.size || 0,
+          uploadedAt: featuredImage.uploaded_at || new Date(),
+          storage: 'b2'
+        };
+      } else if (typeof featuredImage === 'string') {
+        // URL string - lưu với thông tin cơ bản
+        media.featuredImage = {
+          url: featuredImage,
+          key: `media-${Date.now()}`,
+          filename: featuredImage.split('/').pop() || `image-${Date.now()}`,
+          size: 0,
+          uploadedAt: new Date(),
+          storage: 'b2'
+        };
+      }
+    }
 
     console.log('Creating media with data:', media);
     
@@ -87,7 +112,7 @@ export const getMediaService = async (filters = {}) => {
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
-    console.log('MEDIA', media)
+
     const total = await Media.countDocuments(query);
 
     return {
@@ -116,6 +141,17 @@ export const getMediaByIdService = async (id) => {
   }
 };
 
+// Service để lấy nhiều media theo IDs
+export const getMediaByIdsService = async (ids) => {
+  try {
+    const media = await Media.find({ _id: { $in: ids } });
+    return media;
+  } catch (error) {
+    console.error('Error in getMediaByIdsService:', error);
+    throw error;
+  }
+};
+
 // Service để cập nhật media
 export const updateMediaService = async (id, mediaData) => {
   try {
@@ -126,7 +162,8 @@ export const updateMediaService = async (id, mediaData) => {
       category,
       status,
       featuredImage,
-      tags
+      tags,
+      _hasNewFeaturedImage
     } = mediaData;
 
     // Tìm media hiện tại
@@ -152,15 +189,53 @@ export const updateMediaService = async (id, mediaData) => {
 
     // Tạo update object
     const updateFields = {
-      title: title || existingMedia.title,
-      content: content || existingMedia.content,
-      excerpt: excerpt || existingMedia.excerpt,
-      category: category || existingMedia.category,
-      status: status || existingMedia.status,
-      featuredImage: featuredImage || existingMedia.featuredImage,
-      tags: processedTags.length > 0 ? processedTags : existingMedia.tags,
       updatedAt: new Date()
     };
+
+    // Cập nhật các field cơ bản nếu có
+    if (title !== undefined) updateFields.title = title;
+    if (content !== undefined) updateFields.content = content;
+    if (excerpt !== undefined) updateFields.excerpt = excerpt;
+    if (category !== undefined) updateFields.category = category;
+    if (status !== undefined) updateFields.status = status;
+    if (processedTags.length > 0) updateFields.tags = processedTags;
+
+    // Xử lý featured image mới
+    if (_hasNewFeaturedImage && featuredImage) {
+      // Xóa featured image cũ từ B2 nếu có
+      if (existingMedia.featuredImage && existingMedia.featuredImage.key) {
+        try {
+          await deleteMultipleFromB2([existingMedia.featuredImage.key]);
+          console.log(`🗑️ Deleted old featured image from B2: ${existingMedia.featuredImage.key}`);
+        } catch (b2Error) {
+          console.error('Error deleting old image from B2:', b2Error);
+        }
+      }
+
+      // Thêm featured image mới từ B2
+      if (typeof featuredImage === 'object' && featuredImage.url) {
+        updateFields.featuredImage = {
+          url: featuredImage.url,
+          key: featuredImage.key,
+          filename: featuredImage.filename,
+          size: featuredImage.size || 0,
+          uploadedAt: featuredImage.uploaded_at || new Date(),
+          storage: 'b2'
+        };
+      }
+    } else if (featuredImage !== undefined) {
+      // Cập nhật featured image mà không xóa file cũ
+      if (typeof featuredImage === 'object' && featuredImage.url) {
+        updateFields.featuredImage = {
+          url: featuredImage.url,
+          key: featuredImage.key || existingMedia.featuredImage?.key,
+          filename: featuredImage.filename || existingMedia.featuredImage?.filename,
+          size: featuredImage.size || existingMedia.featuredImage?.size || 0,
+          uploadedAt: featuredImage.uploaded_at || existingMedia.featuredImage?.uploadedAt || new Date(),
+          storage: 'b2'
+        };
+      }
+    }
 
     console.log('Updating media with data:', updateFields);
     
@@ -180,10 +255,24 @@ export const updateMediaService = async (id, mediaData) => {
 // Service để xóa media
 export const deleteMediaService = async (id) => {
   try {
-    const media = await Media.findByIdAndDelete(id);
+    const media = await Media.findById(id);
     if (!media) {
       throw new Error('Media not found');
     }
+
+    // Xóa featured image từ B2 nếu có
+    if (media.featuredImage && media.featuredImage.key) {
+      try {
+        await deleteMultipleFromB2([media.featuredImage.key]);
+        console.log(`🗑️ Deleted featured image from B2: ${media.featuredImage.key}`);
+      } catch (b2Error) {
+        console.error('Error deleting image from B2:', b2Error);
+      }
+    }
+
+    // Xóa media từ database
+    await Media.findByIdAndDelete(id);
+    
     return media;
   } catch (error) {
     console.error('Error in deleteMediaService:', error);
@@ -194,6 +283,20 @@ export const deleteMediaService = async (id) => {
 // Service để xóa nhiều media
 export const bulkDeleteMediaService = async (ids) => {
   try {
+    // Lấy tất cả media để có thông tin files
+    const mediaItems = await Media.find({ _id: { $in: ids } });
+    
+    // Xóa featured images từ B2
+    const keysToDelete = mediaItems
+      .filter(media => media.featuredImage && media.featuredImage.key)
+      .map(media => media.featuredImage.key);
+    
+    if (keysToDelete.length > 0) {
+      await deleteMultipleFromB2(keysToDelete);
+      console.log(`🗑️ Deleted ${keysToDelete.length} featured images from B2`);
+    }
+
+    // Xóa media từ database
     const result = await Media.deleteMany({ _id: { $in: ids } });
     return result;
   } catch (error) {
@@ -225,36 +328,13 @@ export const getMediaByStatusService = async (status) => {
     throw error;
   }
 };
-export const deleteFeaturedImage = async (imageUrl, filename = null) => {
-  try {
-    console.log('Deleting featured image:', { imageUrl, filename });
 
-    let url = '/v1/media/delete-featured-image';
-    let data = {};
-
-    // Nếu có imageUrl (Cloudinary), gửi qua body
-    if (imageUrl) {
-      data = { imageUrl };
-    } 
-    // Nếu có filename (local storage), thêm vào URL
-    else if (filename) {
-      url += `/${filename}`;
-    } else {
-      throw new Error('Either imageUrl or filename is required');
-    }
-
-    const response = await apiClient.delete(url, { data });
-    return response.data;
-  } catch (error) {
-    console.error('❌ Error in deleteFeaturedImage service:', error.message);
-    throw error;
-  }
-};
 // Export tất cả services
 const mediaService = {
   createMediaService,
   getMediaService,
   getMediaByIdService,
+  getMediaByIdsService,
   updateMediaService,
   deleteMediaService,
   bulkDeleteMediaService,

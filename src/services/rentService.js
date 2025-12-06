@@ -1,5 +1,5 @@
-// services/rentService.js
 import Rent from '../models/rentModel.js';
+import { deleteMultipleFromB2 } from '../config/b2.js';
 
 class RentService {
   // GET ALL RENTALS WITH PAGINATION AND FILTERS
@@ -13,8 +13,7 @@ class RentService {
       if (search) {
         query.$or = [
           { title: { $regex: search, $options: 'i' } },
-          { location: { $regex: search, $options: 'i' } },
-          { 'contactInfo.address': { $regex: search, $options: 'i' } }
+          { location: { $regex: search, $options: 'i' } }
         ];
       }
       
@@ -70,10 +69,22 @@ class RentService {
   // UPDATE RENTAL
   async updateRental(id, rentalData) {
     try {
+      const { newGalleryImages, ...updateData } = rentalData;
+      
+      // Nếu có images mới, thêm vào gallery
+      if (newGalleryImages && newGalleryImages.length > 0) {
+        const rental = await Rent.findById(id);
+        if (rental) {
+          rental.gallery = [...rental.gallery, ...newGalleryImages];
+          await rental.save();
+          return rental;
+        }
+      }
+      
       const rental = await Rent.findByIdAndUpdate(
         id,
         { 
-          ...rentalData,
+          ...updateData,
           updatedAt: Date.now()
         },
         { new: true, runValidators: true }

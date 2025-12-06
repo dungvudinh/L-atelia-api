@@ -1,41 +1,39 @@
 import { StatusCodes } from "http-status-codes";
 import mediaService from '../services/mediaService.js';
 import { 
-  uploadMediaFile,
-  deleteFromCloudinaryByUrl,
-  deleteMultipleFromCloudinary
-} from '../config/cloudinary.js';
+  getStorageStrategy,
+  deleteFileFromB2,
+  deleteMultipleFromB2
+} from '../config/b2.js';
 
-// @desc    Upload featured image to Cloudinary
+// @desc    Upload featured image to B2
 // @route   POST /api/media/upload-featured-image
 export const uploadFeaturedImage = async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.b2Files || !req.b2Files[0]) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: 'No file uploaded'
+        message: 'No file uploaded to B2'
       });
     }
 
-    // Upload lên Cloudinary
-    let uploadResult;
-    if (process.env.USE_CLOUDINARY === 'true') {
-      uploadResult = await uploadMediaFile(req.file);
-      
-    } else {
-      // Local storage fallback
-      const relativePath = `/uploads/media/${req.file.filename}`;
-      uploadResult = {
-        url: `${req.protocol}://${req.get('host')}${relativePath}`,
-        filename: req.file.filename,
-        path: relativePath
-      };
-    }
+    const b2File = req.b2Files[0];
+    
+    const uploadResult = {
+      url: b2File.url,
+      key: b2File.key,
+      path: b2File.path,
+      filename: b2File.filename,
+      size: b2File.size,
+      uploaded_at: new Date(),
+      storage: 'b2'
+    };
 
     res.status(StatusCodes.OK).json({
       success: true,
       data: uploadResult,
-      message: 'Image uploaded successfully'
+      message: 'Image uploaded successfully',
+      storage: 'b2'
     });
 
   } catch (error) {
@@ -48,76 +46,26 @@ export const uploadFeaturedImage = async (req, res) => {
   }
 };
 
-// @desc    Delete featured image from Cloudinary
+// @desc    Delete featured image from B2
 // @route   DELETE /api/media/delete-featured-image
-// mediaController.js
 export const deleteFeaturedImage = async (req, res) => {
   try {
-    console.log('=== DELETE FEATURED IMAGE ===');
-    const { imageUrl, filename } = req.body;
+    const { key } = req.body;
 
-    console.log('ImageUrl from body:', imageUrl);
-    console.log('Filename from body:', filename);
-
-    if (!imageUrl && !filename) {
+    if (!key) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: 'Either imageUrl or filename is required'
+        message: 'key is required for B2 storage'
       });
     }
-
-    if (process.env.USE_CLOUDINARY === 'true') {
-      // Cloudinary - sử dụng imageUrl
-      if (!imageUrl) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-          success: false,
-          message: 'imageUrl is required for Cloudinary'
-        });
-      }
-      
-      await deleteFromCloudinaryByUrl(imageUrl);
-      console.log('✅ Deleted from Cloudinary:', imageUrl);
-      
-    } else {
-      // Local storage - sử dụng filename
-      let fileToDelete = filename;
-      
-      // Nếu có imageUrl nhưng không có filename, extract từ imageUrl
-      if (!fileToDelete && imageUrl) {
-        fileToDelete = imageUrl.split('/').pop();
-      }
-      
-      if (!fileToDelete) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-          success: false,
-          message: 'Filename is required for local storage'
-        });
-      }
-      
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      const __dirname = path.resolve();
-      const uploadsDir = path.join(__dirname, 'uploads/media');
-      const filePath = path.join(uploadsDir, fileToDelete);
-
-      console.log('Deleting file from path:', filePath);
-
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        console.log('✅ Local file deleted successfully');
-      } else {
-        console.log('⚠️ File not found:', filePath);
-        return res.status(StatusCodes.NOT_FOUND).json({
-          success: false,
-          message: 'Image file not found'
-        });
-      }
-    }
+    
+    await deleteFileFromB2(key);
+    console.log('✅ Deleted from B2:', key);
 
     res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Image deleted successfully'
+      message: 'Image deleted successfully',
+      storage: 'b2'
     });
 
   } catch (error) {
@@ -134,15 +82,33 @@ export const deleteFeaturedImage = async (req, res) => {
 // @route   POST /api/media
 export const createMedia = async (req, res) => {
   try {
-    const {
+    console.log('BODY', req.body);
+    
+    let {
       title,
       content,
       excerpt,
       category,
       status,
-      featuredImage, // URL từ Cloudinary hoặc local path
+      featuredImage,
       tags
     } = req.body;
+
+    // Parse JSON data nếu có
+    if (req.body.data) {
+      try {
+        const parsedData = JSON.parse(req.body.data);
+        title = parsedData.title || title;
+        content = parsedData.content || content;
+        excerpt = parsedData.excerpt || excerpt;
+        category = parsedData.category || category;
+        status = parsedData.status || status;
+        featuredImage = parsedData.featuredImage || featuredImage;
+        tags = parsedData.tags || tags;
+      } catch (parseError) {
+        console.error('Error parsing JSON data:', parseError);
+      }
+    }
 
     // Validate required fields
     if (!title || !content) {
@@ -150,6 +116,18 @@ export const createMedia = async (req, res) => {
         success: false,
         message: 'Title and content are required'
       });
+    }
+
+    // Xử lý featured image từ B2 nếu có
+    if (req.b2Files && req.b2Files.length > 0) {
+      const b2File = req.b2Files[0];
+      featuredImage = {
+        url: b2File.url,
+        key: b2File.key,
+        filename: b2File.filename,
+        size: b2File.size,
+        uploaded_at: new Date()
+      };
     }
 
     // Gọi service để tạo media
@@ -166,7 +144,8 @@ export const createMedia = async (req, res) => {
     res.status(StatusCodes.CREATED).json({
       success: true,
       data: newMedia,
-      message: 'Media created successfully'
+      message: 'Media created successfully',
+      storage: 'b2'
     });
 
   } catch (error) {
@@ -199,7 +178,7 @@ export const getMedia = async (req, res) => {
       category,
       search
     });
-    console.log(result)
+    
     res.status(StatusCodes.OK).json({
       success: true,
       data: result.media,
@@ -257,7 +236,8 @@ export const getMediaById = async (req, res) => {
 export const updateMedia = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
+    
+    let {
       title,
       content,
       excerpt,
@@ -267,6 +247,36 @@ export const updateMedia = async (req, res) => {
       tags
     } = req.body;
 
+    // Parse JSON data nếu có
+    if (req.body.data) {
+      try {
+        const parsedData = JSON.parse(req.body.data);
+        title = parsedData.title || title;
+        content = parsedData.content || content;
+        excerpt = parsedData.excerpt || excerpt;
+        category = parsedData.category || category;
+        status = parsedData.status || status;
+        featuredImage = parsedData.featuredImage || featuredImage;
+        tags = parsedData.tags || tags;
+      } catch (parseError) {
+        console.error('Error parsing JSON data:', parseError);
+      }
+    }
+
+    // Xử lý featured image mới từ B2 nếu có
+    let hasNewFeaturedImage = false;
+    if (req.b2Files && req.b2Files.length > 0) {
+      const b2File = req.b2Files[0];
+      featuredImage = {
+        url: b2File.url,
+        key: b2File.key,
+        filename: b2File.filename,
+        size: b2File.size,
+        uploaded_at: new Date()
+      };
+      hasNewFeaturedImage = true;
+    }
+
     // Gọi service để cập nhật media
     const updatedMedia = await mediaService.updateMediaService(id, {
       title,
@@ -275,13 +285,15 @@ export const updateMedia = async (req, res) => {
       category,
       status,
       featuredImage,
-      tags
+      tags,
+      _hasNewFeaturedImage: hasNewFeaturedImage
     });
     
     res.status(StatusCodes.OK).json({
       success: true,
       data: updatedMedia,
-      message: 'Media updated successfully'
+      message: 'Media updated successfully',
+      storage: 'b2'
     });
 
   } catch (error) {
@@ -314,19 +326,20 @@ export const remove = async (req, res) => {
     // Xóa media từ database
     await mediaService.deleteMediaService(id);
 
-    // Xóa featured image từ Cloudinary nếu có
-    if (process.env.USE_CLOUDINARY === 'true' && media.featuredImage) {
+    // Xóa featured image từ B2 nếu có
+    if (media.featuredImage && media.featuredImage.key) {
       try {
-        await deleteFromCloudinaryByUrl(media.featuredImage);
-        console.log(`🗑️ Deleted featured image from Cloudinary: ${media.featuredImage}`);
-      } catch (cloudinaryError) {
-        console.error('Error deleting image from Cloudinary:', cloudinaryError);
+        await deleteFileFromB2(media.featuredImage.key);
+        console.log(`🗑️ Deleted featured image from B2: ${media.featuredImage.key}`);
+      } catch (b2Error) {
+        console.error('Error deleting image from B2:', b2Error);
       }
     }
 
     res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Media deleted successfully'
+      message: 'Media deleted successfully',
+      storage: 'b2'
     });
 
   } catch (error) {
@@ -366,26 +379,21 @@ export const bulkDeleteMedia = async (req, res) => {
     // Gọi service để xóa nhiều media
     const result = await mediaService.bulkDeleteMediaService(ids);
 
-    // Xóa featured images từ Cloudinary nếu có
-    if (process.env.USE_CLOUDINARY === 'true') {
-      try {
-        const imageUrls = mediaItems
-          .filter(media => media.featuredImage)
-          .map(media => media.featuredImage);
-        
-        if (imageUrls.length > 0) {
-          await deleteMultipleFromCloudinary(imageUrls);
-          console.log(`🗑️ Deleted ${imageUrls.length} featured images from Cloudinary`);
-        }
-      } catch (cloudinaryError) {
-        console.error('Error deleting images from Cloudinary:', cloudinaryError);
-      }
+    // Xóa featured images từ B2 nếu có
+    const keysToDelete = mediaItems
+      .filter(media => media.featuredImage && media.featuredImage.key)
+      .map(media => media.featuredImage.key);
+    
+    if (keysToDelete.length > 0) {
+      await deleteMultipleFromB2(keysToDelete);
+      console.log(`🗑️ Deleted ${keysToDelete.length} featured images from B2`);
     }
 
     res.status(StatusCodes.OK).json({
       success: true,
       message: `Deleted ${result.deletedCount} media items successfully`,
-      deletedCount: result.deletedCount
+      deletedCount: result.deletedCount,
+      storage: 'b2'
     });
 
   } catch (error) {

@@ -1,10 +1,9 @@
 import { StatusCodes } from "http-status-codes";
 import rentService from '../services/rentService.js';
 import { 
-  uploadRentFiles,
-  deleteFromCloudinaryByUrl,
-  deleteMultipleFromCloudinary
-} from '../config/cloudinary.js';
+  deleteFileFromB2,
+  deleteMultipleFromB2
+} from '../config/b2.js';
 
 export const getAllRentals = async (req, res) => {
   try {
@@ -59,13 +58,23 @@ export const getRentalById = async (req, res) => {
 
 export const createRental = async (req, res) => {
   try {
-    const rentalData = req.body;
+    let rentalData = req.body;
     
-    // Parse array fields from string to array
+    // Parse JSON data nếu có
+    if (req.body.data) {
+      try {
+        rentalData = JSON.parse(req.body.data);
+      } catch (parseError) {
+        console.error('Error parsing JSON data:', parseError);
+      }
+    }
+    
+    // Parse array fields từ string sang array
     if (rentalData.beds && !rentalData.adultBeds) {
       rentalData.adultBeds = rentalData.beds;
       delete rentalData.beds;
     }
+    
     if (rentalData.highlights && typeof rentalData.highlights === 'string') {
       rentalData.highlights = JSON.parse(rentalData.highlights);
     }
@@ -78,8 +87,27 @@ export const createRental = async (req, res) => {
       rentalData.gallery = JSON.parse(rentalData.gallery);
     }
     
-    if (rentalData.contactInfo && typeof rentalData.contactInfo === 'string') {
-      rentalData.contactInfo = JSON.parse(rentalData.contactInfo);
+    // Xử lý gallery images từ B2 nếu có
+    if (req.b2Files && req.b2Files.length > 0) {
+      const uploadedImages = req.b2Files.map((b2File) => ({
+        id: Date.now() + Math.random(),
+        url: b2File.url,
+        key: b2File.key,
+        filename: b2File.filename,
+        name: b2File.originalname || b2File.filename,
+        size: b2File.size,
+        isFeatured: false,
+        uploadedAt: new Date(),
+        storage: 'b2'
+      }));
+      
+      rentalData.gallery = [...(rentalData.gallery || []), ...uploadedImages];
+      
+      // Nếu có images, set featured image đầu tiên
+      if (uploadedImages.length > 0 && !rentalData.featuredImage) {
+        rentalData.featuredImage = uploadedImages[0].url;
+        uploadedImages[0].isFeatured = true;
+      }
     }
     
     const newRental = await rentService.createRental(rentalData);
@@ -101,12 +129,23 @@ export const createRental = async (req, res) => {
 export const updateRental = async (req, res) => {
   try {
     const { id } = req.params;
-    const rentalData = req.body;
+    let rentalData = req.body;
+    
+    // Parse JSON data nếu có
+    if (req.body.data) {
+      try {
+        rentalData = JSON.parse(req.body.data);
+      } catch (parseError) {
+        console.error('Error parsing JSON data:', parseError);
+      }
+    }
+    
     if (rentalData.beds && !rentalData.adultBeds) {
       rentalData.adultBeds = rentalData.beds;
       delete rentalData.beds;
     }
-    // Parse array fields from string to array
+    
+    // Parse array fields từ string sang array
     if (rentalData.highlights && typeof rentalData.highlights === 'string') {
       rentalData.highlights = JSON.parse(rentalData.highlights);
     }
@@ -119,8 +158,21 @@ export const updateRental = async (req, res) => {
       rentalData.gallery = JSON.parse(rentalData.gallery);
     }
     
-    if (rentalData.contactInfo && typeof rentalData.contactInfo === 'string') {
-      rentalData.contactInfo = JSON.parse(rentalData.contactInfo);
+    // Xử lý gallery images mới từ B2 nếu có
+    if (req.b2Files && req.b2Files.length > 0) {
+      const uploadedImages = req.b2Files.map((b2File) => ({
+        id: Date.now() + Math.random(),
+        url: b2File.url,
+        key: b2File.key,
+        filename: b2File.filename,
+        name: b2File.originalname || b2File.filename,
+        size: b2File.size,
+        isFeatured: false,
+        uploadedAt: new Date(),
+        storage: 'b2'
+      }));
+      
+      rentalData.newGalleryImages = uploadedImages;
     }
     
     const updatedRental = await rentService.updateRental(id, rentalData);
@@ -143,30 +195,18 @@ export const deleteRental = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Get rental first to delete associated images
+    // Get rental first to delete associated images từ B2
     const rental = await rentService.getRentalById(id);
     
     if (rental && rental.gallery) {
-      // Delete all gallery images from Cloudinary or local
-      if (process.env.USE_CLOUDINARY === 'true') {
-        const imageUrls = rental.gallery
-          .filter(image => image.url)
-          .map(image => image.url);
-        
-        if (imageUrls.length > 0) {
-          await deleteMultipleFromCloudinary(imageUrls);
-          console.log(`🗑️ Deleted ${imageUrls.length} rental images from Cloudinary`);
-        }
-      } else {
-        // Local storage
-        const { deleteFile } = await import('../config/multer.js');
-        rental.gallery.forEach(image => {
-          if (image.url) {
-            const filename = image.url.split('/').pop();
-            const filePath = `uploads/rent/${filename}`;
-            deleteFile(filePath);
-          }
-        });
+      // Delete all gallery images từ B2
+      const keysToDelete = rental.gallery
+        .filter(image => image.key)
+        .map(image => image.key);
+      
+      if (keysToDelete.length > 0) {
+        await deleteMultipleFromB2(keysToDelete);
+        console.log(`🗑️ Deleted ${keysToDelete.length} rental images from B2`);
       }
     }
     
@@ -189,38 +229,24 @@ export const uploadRentalImages = async (req, res) => {
   try {
     const { id } = req.params;
     
-    if (!req.files || req.files.length === 0) {
+    if (!req.b2Files || req.b2Files.length === 0) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: 'No files uploaded'
       });
     }
-    
-    let uploadedImages = [];
 
-    if (process.env.USE_CLOUDINARY === 'true') {
-      // Upload to Cloudinary
-      const cloudinaryResults = await uploadRentFiles(req.files);
-      
-      uploadedImages = cloudinaryResults.map((result, index) => ({
-        id: Date.now() + Math.random(),
-        url: result.url,
-        name: req.files[index].originalname,
-        isFeatured: false,
-        cloudinaryPublicId: result.publicId,
-        size: result.size
-      }));
-    } else {
-      // Local storage
-      uploadedImages = req.files.map(file => ({
-        id: Date.now() + Math.random(),
-        url: `/uploads/rent/${file.filename}`,
-        name: file.originalname,
-        isFeatured: false,
-        size: file.size
-      }));
-    }
-    
+    const uploadedImages = req.b2Files.map((b2File) => ({
+      id: Date.now() + Math.random(),
+      url: b2File.url,
+      key: b2File.key,
+      filename: b2File.key.split('/').pop() || `image-${Date.now()}`,
+      size: b2File.size,
+      isFeatured: false,
+      uploadedAt: new Date(),
+      storage: 'b2'
+    }));
+
     const updatedRental = await rentService.uploadRentalImages(id, uploadedImages);
     
     res.status(StatusCodes.OK).json({
@@ -255,19 +281,10 @@ export const deleteRentalImage = async (req, res) => {
       });
     }
 
-    // Delete image from Cloudinary or local
-    if (process.env.USE_CLOUDINARY === 'true') {
-      if (image.url) {
-        await deleteFromCloudinaryByUrl(image.url);
-      }
-    } else {
-      // Local storage
-      const { deleteFile } = await import('../config/multer.js');
-      if (image.url) {
-        const filename = image.url.split('/').pop();
-        const filePath = `uploads/rent/${filename}`;
-        deleteFile(filePath);
-      }
+    // Delete image từ B2
+    if (image.key) {
+      await deleteFileFromB2(image.key);
+      console.log(`🗑️ Deleted rental image from B2: ${image.key}`);
     }
     
     const updatedRental = await rentService.deleteRentalImage(id, imageId);

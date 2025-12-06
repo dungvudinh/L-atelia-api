@@ -30,6 +30,7 @@ class EmailService {
   // Send booking confirmation email
   async sendBookingConfirmation(booking, property) {
     try {
+      console.log(property)
       const nights = Math.ceil((new Date(booking.checkOut) - new Date(booking.checkIn)) / (1000 * 60 * 60 * 24));
       const totalAmount = nights * property.price;
 

@@ -8,7 +8,7 @@ import {
     deleteImages,
     createProject 
 } from "../../controllers/projectController.js";
-import { uploadProjectFields, handleMulterError } from '../../config/multer.js';
+import { uploadProjectFields, handleMulterError } from '../../config/b2.js';
 
 const Router = express.Router({mergeParams:true});
 

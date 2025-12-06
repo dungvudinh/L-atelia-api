@@ -1,12 +1,8 @@
 import { Project } from '../models/projectModel.js';
-import fs from 'fs';
+import { deleteMultipleFromB2 } from '../config/b2.js';
 
-// services/projectService.js
 export const createProjectService = async (projectData) => {
   try {
-    console.log('=== CREATE PROJECT SERVICE ===');
-    console.log('Project Data:', projectData);
-
     const {
       title,
       description,
@@ -16,8 +12,7 @@ export const createProjectService = async (projectData) => {
       specifications,
       propertyHighlights,
       specialSections,
-      files,        // Local storage
-      images        // Cloudinary storage
+      images
     } = projectData;
 
     // Tạo project object
@@ -34,53 +29,12 @@ export const createProjectService = async (projectData) => {
       updatedAt: new Date()
     };
 
-    // Xử lý images - LUÔN LƯU DƯỚI DẠNG OBJECT {url, uploaded_at}
-    if (files) {
-      // Local storage format - convert thành object với uploaded_at
-      const currentDate = new Date();
-      
-      project.heroImage = files.heroImage ? {
-        url: files.heroImage.path,
-        uploaded_at: currentDate
-      } : null;
-      
-      project.gallery = files.gallery ? files.gallery.map(file => ({
-        url: file.path,
-        uploaded_at: currentDate
-      })) : [];
-      
-      project.constructionProgress = files.constructionProgress ? files.constructionProgress.map(file => ({
-        url: file.path,
-        uploaded_at: currentDate
-      })) : [];
-      
-      project.designImages = files.designImages ? files.designImages.map(file => ({
-        url: file.path,
-        uploaded_at: currentDate
-      })) : [];
-      
-      project.brochure = files.brochure ? files.brochure.map(file => ({
-        url: file.path,
-        uploaded_at: currentDate
-      })) : [];
-      
-    } else if (images) {
-      // Cloudinary storage format - đã có uploaded_at từ controller
-      project.heroImage = images.heroImage || null;
-      project.gallery = images.gallery || [];
-      project.constructionProgress = images.constructionProgress || [];
-      project.designImages = images.designImages || [];
-      project.brochure = images.brochure || [];
-    } else {
-      // No images
-      project.heroImage = null;
-      project.gallery = [];
-      project.constructionProgress = [];
-      project.designImages = [];
-      project.brochure = [];
-    }
-
-    console.log('Final Project Object:', project);
+    // Xử lý images từ B2
+    project.heroImage = images?.heroImage || null;
+    project.gallery = images?.gallery || [];
+    project.constructionProgress = images?.constructionProgress || [];
+    project.designImages = images?.designImages || [];
+    project.brochure = images?.brochure || [];
     
     // Lưu vào database
     const newProject = await Project.create(project);
@@ -97,7 +51,6 @@ const getProjectsService = async (filters = {}) => {
     
     const query = {};
     
-    // Search filter
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
@@ -105,7 +58,6 @@ const getProjectsService = async (filters = {}) => {
       ];
     }
 
-    // Status filter
     if (status && status !== 'all') {
       query.status = status;
     }
@@ -131,7 +83,6 @@ const getProjectsService = async (filters = {}) => {
 
 const getProjectByIdService = async (id) => {
   try {
-    console.log(id)
     const project = await Project.findById(id);
     if (!project) {
       throw new Error('Project not found');
@@ -154,14 +105,8 @@ const getProjectBySlugService = async (slug) => {
   }
 };
 
-// services/projectService.js - UPDATE VỚI OBJECT {url, uploaded_at}
 export const updateProjectService = async (id, projectData) => {
   try {
-    console.log('=== UPDATE PROJECT SERVICE ===');
-    console.log('Project ID:', id);
-    console.log('Update Data:', projectData);
-
-    // Tìm project hiện tại
     const existingProject = await Project.findById(id);
     if (!existingProject) {
       throw new Error('Project not found');
@@ -181,16 +126,13 @@ export const updateProjectService = async (id, projectData) => {
       constructionProgress,
       designImages,
       brochure,
-      _hasNewFiles,
-      files  // Local storage backup
+      _hasNewFiles
     } = projectData;
 
-    // Tạo update object
     const updateFields = {
       updatedAt: new Date()
     };
 
-    // Cập nhật các field cơ bản
     if (title !== undefined) updateFields.title = title;
     if (description !== undefined) updateFields.description = description;
     if (status !== undefined) updateFields.status = status;
@@ -200,73 +142,46 @@ export const updateProjectService = async (id, projectData) => {
     if (propertyHighlights !== undefined) updateFields.propertyHighlights = propertyHighlights;
     if (specialSections !== undefined) updateFields.specialSections = specialSections;
 
-    // Xử lý images - LUÔN LƯU DƯỚI DẠNG OBJECT {url, uploaded_at}
+    // Xử lý images mới từ B2
     if (_hasNewFiles) {
-      console.log('=== PROCESSING NEW FILES ===');
-
-      // Hàm xóa file local an toàn
-      const safeDeleteFile = (filePath) => {
-        if (filePath && fs.existsSync(filePath)) {
-          try {
-            fs.unlinkSync(filePath);
-            console.log(`🗑️ Deleted old file: ${filePath}`);
-          } catch (deleteError) {
-            console.error(`⚠️ Could not delete file ${filePath}:`, deleteError.message);
-          }
+      // Hàm xóa file từ B2
+      const safeDeleteFile = async (fileInfo) => {
+        if (!fileInfo || !fileInfo.key) return;
+        
+        try {
+          await deleteMultipleFromB2([fileInfo.key]);
+        } catch (deleteError) {
+          console.error('Could not delete B2 file:', deleteError.message);
         }
       };
 
-      // Xử lý heroImage
       if (heroImage !== undefined) {
-        // Xóa heroImage cũ nếu là local file
-        if (existingProject.heroImage && existingProject.heroImage.url && existingProject.heroImage.url.startsWith('/uploads/')) {
-          safeDeleteFile(existingProject.heroImage.url);
+        if (existingProject.heroImage) {
+          await safeDeleteFile(existingProject.heroImage);
         }
         updateFields.heroImage = heroImage;
-        console.log('Updated heroImage:', heroImage);
       }
 
-      // Xử lý gallery (thêm vào gallery hiện tại)
       if (gallery && Array.isArray(gallery) && gallery.length > 0) {
         const existingGallery = existingProject.gallery || [];
         updateFields.gallery = [...existingGallery, ...gallery];
-        console.log('Updated gallery - Total images:', updateFields.gallery.length);
       }
 
-      // Xử lý constructionProgress (thêm vào constructionProgress hiện tại)
       if (constructionProgress && Array.isArray(constructionProgress) && constructionProgress.length > 0) {
         const existingProgress = existingProject.constructionProgress || [];
         updateFields.constructionProgress = [...existingProgress, ...constructionProgress];
-        console.log('Updated constructionProgress - Total images:', updateFields.constructionProgress.length);
       }
 
-      // Xử lý designImages (thêm vào designImages hiện tại)
       if (designImages && Array.isArray(designImages) && designImages.length > 0) {
         const existingDesigns = existingProject.designImages || [];
         updateFields.designImages = [...existingDesigns, ...designImages];
-        console.log('Updated designImages - Total images:', updateFields.designImages.length);
       }
 
-      // Xử lý brochure (thêm vào brochure hiện tại)
       if (brochure && Array.isArray(brochure) && brochure.length > 0) {
         const existingBrochures = existingProject.brochure || [];
         updateFields.brochure = [...existingBrochures, ...brochure];
-        console.log('Updated brochure - Total files:', updateFields.brochure.length);
-      }
-
-      // Fallback: xử lý local files nếu có
-      if (files && files.heroImage) {
-        if (existingProject.heroImage && existingProject.heroImage.url) {
-          safeDeleteFile(existingProject.heroImage.url);
-        }
-        updateFields.heroImage = {
-          url: files.heroImage.path,
-          uploaded_at: new Date()
-        };
       }
     }
-
-    console.log('Final Update Fields:', updateFields);
 
     const updatedProject = await Project.findByIdAndUpdate(
       id, 
@@ -288,26 +203,41 @@ const deleteProjectService = async (id) => {
       throw new Error('Project not found');
     }
 
-    // Xóa files local nếu có
-    const safeDeleteFile = (filePath) => {
-      if (filePath && filePath.startsWith('/uploads/') && fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`🗑️ Deleted file: ${filePath}`);
-        } catch (deleteError) {
-          console.error(`⚠️ Could not delete file ${filePath}:`, deleteError.message);
-        }
-      }
-    };
+    // Xóa files từ B2
+    const keysToDelete = [];
 
-    // Xóa tất cả files local
-    if (project.heroImage && project.heroImage.url) safeDeleteFile(project.heroImage.url);
-    if (project.gallery) project.gallery.forEach(img => safeDeleteFile(img.url));
-    if (project.constructionProgress) project.constructionProgress.forEach(img => safeDeleteFile(img.url));
-    if (project.designImages) project.designImages.forEach(img => safeDeleteFile(img.url));
-    if (project.brochure) project.brochure.forEach(doc => safeDeleteFile(doc.url));
+    if (project.heroImage && project.heroImage.key) {
+      keysToDelete.push(project.heroImage.key);
+    }
+    
+    if (project.gallery) {
+      project.gallery.forEach(img => {
+        if (img.key) keysToDelete.push(img.key);
+      });
+    }
+    
+    if (project.constructionProgress) {
+      project.constructionProgress.forEach(img => {
+        if (img.key) keysToDelete.push(img.key);
+      });
+    }
+    
+    if (project.designImages) {
+      project.designImages.forEach(img => {
+        if (img.key) keysToDelete.push(img.key);
+      });
+    }
+    
+    if (project.brochure) {
+      project.brochure.forEach(doc => {
+        if (doc.key) keysToDelete.push(doc.key);
+      });
+    }
 
-    // Xóa project từ database
+    if (keysToDelete.length > 0) {
+      await deleteMultipleFromB2(keysToDelete);
+    }
+
     await Project.findByIdAndDelete(id);
     
     return project;
@@ -323,28 +253,18 @@ const deleteProjectImagesService = async (id, imageType, imageUrls) => {
       throw new Error('Project not found');
     }
 
-    // Xóa files local nếu có
-    const safeDeleteFile = (filePath) => {
-      if (filePath && filePath.startsWith('/uploads/') && fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`🗑️ Deleted file: ${filePath}`);
-        } catch (deleteError) {
-          console.error(`⚠️ Could not delete file ${filePath}:`, deleteError.message);
-        }
-      }
-    };
+    // Xóa files từ B2
+    const keysToDelete = imageUrls
+      .map(item => typeof item === 'object' ? item.key : null)
+      .filter(key => key !== null);
+
+    if (keysToDelete.length > 0) {
+      await deleteMultipleFromB2(keysToDelete);
+    }
 
     const updateOperation = {};
     switch (imageType) {
       case 'gallery':
-        // Xóa files local
-        imageUrls.forEach(url => {
-          const fileUrl = typeof url === 'object' ? url.url : url;
-          if (fileUrl.startsWith('/uploads/')) {
-            safeDeleteFile(fileUrl);
-          }
-        });
         updateOperation.gallery = project.gallery.filter(img => 
           !imageUrls.some(url => {
             const compareUrl = typeof url === 'object' ? url.url : url;
@@ -352,13 +272,8 @@ const deleteProjectImagesService = async (id, imageType, imageUrls) => {
           })
         );
         break;
+        
       case 'constructionProgress':
-        imageUrls.forEach(url => {
-          const fileUrl = typeof url === 'object' ? url.url : url;
-          if (fileUrl.startsWith('/uploads/')) {
-            safeDeleteFile(fileUrl);
-          }
-        });
         updateOperation.constructionProgress = project.constructionProgress.filter(img => 
           !imageUrls.some(url => {
             const compareUrl = typeof url === 'object' ? url.url : url;
@@ -366,13 +281,8 @@ const deleteProjectImagesService = async (id, imageType, imageUrls) => {
           })
         );
         break;
+        
       case 'designImages':
-        imageUrls.forEach(url => {
-          const fileUrl = typeof url === 'object' ? url.url : url;
-          if (fileUrl.startsWith('/uploads/')) {
-            safeDeleteFile(fileUrl);
-          }
-        });
         updateOperation.designImages = project.designImages.filter(img => 
           !imageUrls.some(url => {
             const compareUrl = typeof url === 'object' ? url.url : url;
@@ -380,6 +290,7 @@ const deleteProjectImagesService = async (id, imageType, imageUrls) => {
           })
         );
         break;
+        
       default:
         throw new Error('Invalid image type');
     }
