@@ -8,7 +8,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import initializeDatabase from './scripts/initialDatabase.js';
 
-const allowOrigins = ['http://localhost:5173', 'http://localhost:5174','https://latelia.com', 'https://admin.latelia.com' ];
+const allowOrigins = ['http://localhost:5173', 'http://localhost:5174','http://localhost:4173','http://localhost:4174', 'https://latelia.com', 'https://admin.latelia.com',  ];
 const app = express();
 
 const START_SERVER = () => {
