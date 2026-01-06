@@ -6,8 +6,8 @@ import sharp from 'sharp';
 // ==================== BACKBLAZE B2 CONFIGURATION ====================
 const s3 = new AWS.S3({
   endpoint: process.env.B2_ENDPOINT || 'https://s3.us-west-001.backblazeb2.com',
-  accessKeyId: process.env.B2_ACCESS_KEY_ID,
-  secretAccessKey: process.env.B2_SECRET_ACCESS_KEY,
+  accessKeyId: '0055260a374b5ff0000000007',
+  secretAccessKey: 'K005ACRMiQA1WzODoU0qlHBUslezqCA',
   region: process.env.B2_REGION || 'us-west-001',
   s3ForcePathStyle: true
 });

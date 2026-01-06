@@ -25,7 +25,7 @@
     "@babel/runtime": "^7.28.4",
     "@eslint/js": "^9.39.0",
     "async-exit-hook": "^2.0.1",
-    "aws-sdk": "^2.1692.0",
+    "aws-sdk": "^2.1693.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
