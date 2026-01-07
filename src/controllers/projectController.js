@@ -477,12 +477,79 @@ export const getProjectBySlug = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
   try {
+    console.log('=== SERVER: UPDATE REQUEST ===');
     const { id } = req.params;
     
     let updateData = {};
     if (req.body.data) {
       try {
         updateData = JSON.parse(req.body.data);
+        console.log('✅ Successfully parsed update data');
+        
+        // Debug tất cả các loại ảnh
+        console.log('Gallery count from client:', updateData.gallery?.length);
+        console.log('ConstructionProgress count:', updateData.constructionProgress?.length);
+        console.log('DesignImages count:', updateData.designImages?.length);
+        console.log('Brochure count:', updateData.brochure?.length);
+        
+        // ========== XỬ LÝ XÓA ẢNH TỪ B2 CHO TẤT CẢ LOẠI ==========
+        if (updateData.deletedImages) {
+          console.log('=== PROCESSING DELETED IMAGES ===');
+          
+          const itemsToDelete = [];
+          const imageTypes = [
+            'gallery', 
+            'constructionProgress', 
+            'designImages', 
+            'brochure',
+            'heroImage'
+          ];
+          
+          // Process all image types
+          imageTypes.forEach(type => {
+            const urls = updateData.deletedImages[type];
+            if (!urls) return;
+            
+            if (Array.isArray(urls)) {
+              urls.forEach(url => {
+                if (url) {
+                  const key = extractKeyFromUrl(url);
+                  if (key) {
+                    itemsToDelete.push({ url, key, type });
+                    console.log(`Will delete ${type}: ${key.substring(0, 50)}`);
+                  }
+                }
+              });
+            } else if (urls) {
+              // For heroImage (single item, not array)
+              const key = extractKeyFromUrl(urls);
+              if (key) {
+                itemsToDelete.push({ url: urls, key, type });
+                console.log(`Will delete ${type}: ${key.substring(0, 50)}`);
+              }
+            }
+          });
+          
+          // Thực hiện xóa từ B2
+          if (itemsToDelete.length > 0) {
+            const keysToDelete = itemsToDelete.map(item => item.key).filter(key => key);
+            
+            if (keysToDelete.length > 0) {
+              try {
+                await deleteMultipleFromB2(keysToDelete);
+                console.log(`🗑️ Successfully deleted ${keysToDelete.length} files from B2`);
+                console.log('Deleted types:', [...new Set(itemsToDelete.map(item => item.type))]);
+              } catch (b2Error) {
+                console.error('❌ Error deleting from B2:', b2Error.message);
+                // Continue even if B2 delete fails
+              }
+            }
+          }
+          
+          // Xóa field deletedImages khỏi updateData
+          delete updateData.deletedImages;
+        }
+        
       } catch (parseError) {
         console.error('Error parsing JSON data:', parseError);
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -492,9 +559,11 @@ export const update = async (req, res, next) => {
       }
     }
 
-    // Xử lý files mới từ B2
+    // ========== XỬ LÝ FILES MỚI TỪ B2 ==========
     let uploadedFiles = {};
     if (req.b2Files && req.b2Files.length > 0) {
+      console.log(`📁 ${req.b2Files.length} new files uploaded to B2`);
+      
       uploadedFiles = {
         heroImage: req.b2Files.find(file => file.key.includes('heroImage')) || null,
         gallery: req.b2Files.filter(file => file.key.includes('gallery')) || [],
@@ -502,60 +571,119 @@ export const update = async (req, res, next) => {
         designImages: req.b2Files.filter(file => file.key.includes('designImages')) || [],
         brochure: req.b2Files.filter(file => file.key.includes('brochure')) || []
       };
+      
+      console.log('New files by type:');
+      console.log('- Gallery:', uploadedFiles.gallery.length);
+      console.log('- ConstructionProgress:', uploadedFiles.constructionProgress.length);
+      console.log('- DesignImages:', uploadedFiles.designImages.length);
+      console.log('- Brochure:', uploadedFiles.brochure.length);
+      console.log('- HeroImage:', uploadedFiles.heroImage ? 'Yes' : 'No');
+      
+      updateData._hasNewFiles = true;
     }
 
-    // Tạo update data object
-    const projectToUpdate = {
-      ...updateData,
-      _hasNewFiles: Object.keys(uploadedFiles).length > 0
-    };
-
-    // Thêm files mới vào update data
+    // ========== QUAN TRỌNG: MERGE ẢNH HIỆN TẠI VỚI ẢNH MỚI CHO TẤT CẢ LOẠI ==========
     const currentDate = new Date();
     
+    // Hàm helper để filter và merge images
+    const processImageArray = (clientArray, uploadedArray, typeName) => {
+      if (!clientArray || !Array.isArray(clientArray)) {
+        return uploadedArray || [];
+      }
+      
+      console.log(`Processing ${typeName}...`);
+      
+      // Filter out blob URLs (only keep B2 URLs)
+      const existingItems = clientArray.filter(item => {
+        if (!item) return false;
+        
+        let url;
+        if (typeof item === 'object') {
+          url = item.url || '';
+        } else {
+          url = item || '';
+        }
+        
+        const isValid = url && !url.startsWith('blob:') && !url.startsWith('data:');
+        if (!isValid && url) {
+          console.log(`  Filtering out blob URL from ${typeName}: ${url.substring(0, 50)}`);
+        }
+        return isValid;
+      });
+      
+      console.log(`  Existing ${typeName} after filtering: ${existingItems.length} items`);
+      
+      // Add new uploaded files
+      if (uploadedArray && uploadedArray.length > 0) {
+        console.log(`  Adding ${uploadedArray.length} new items to ${typeName}`);
+        
+        uploadedArray.forEach(file => {
+          existingItems.push({
+            url: file.url,
+            key: file.key,
+            path: file.path,
+            uploaded_at: currentDate,
+            name: file.originalname,
+            type: file.mimetype
+          });
+        });
+      }
+      
+      console.log(`  Final ${typeName} count: ${existingItems.length}`);
+      return existingItems;
+    };
+    
+    // Process ALL image types
+    updateData.gallery = processImageArray(updateData.gallery, uploadedFiles.gallery, 'gallery');
+    updateData.constructionProgress = processImageArray(
+      updateData.constructionProgress, 
+      uploadedFiles.constructionProgress, 
+      'constructionProgress'
+    );
+    updateData.designImages = processImageArray(
+      updateData.designImages, 
+      uploadedFiles.designImages, 
+      'designImages'
+    );
+    updateData.brochure = processImageArray(
+      updateData.brochure, 
+      uploadedFiles.brochure, 
+      'brochure'
+    );
+    
+    // Xử lý heroImage
     if (uploadedFiles.heroImage) {
-      projectToUpdate.heroImage = {
+      updateData.heroImage = {
         url: uploadedFiles.heroImage.url,
         key: uploadedFiles.heroImage.key,
         path: uploadedFiles.heroImage.path,
         uploaded_at: currentDate
       };
+    } else if (updateData.heroImage) {
+      // Giữ heroImage hiện tại nếu không upload mới
+      const heroUrl = typeof updateData.heroImage === 'object' 
+        ? updateData.heroImage.url 
+        : updateData.heroImage;
+      
+      // Chỉ giữ lại nếu không phải blob URL
+      if (heroUrl && !heroUrl.startsWith('blob:') && !heroUrl.startsWith('data:')) {
+        if (typeof updateData.heroImage === 'string') {
+          updateData.heroImage = { url: updateData.heroImage };
+        }
+      } else {
+        updateData.heroImage = null;
+      }
     }
-    if (uploadedFiles.gallery) {
-      projectToUpdate.gallery = uploadedFiles.gallery.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
-        uploaded_at: currentDate
-      }));
-    }
-    if (uploadedFiles.constructionProgress) {
-      projectToUpdate.constructionProgress = uploadedFiles.constructionProgress.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
-        uploaded_at: currentDate
-      }));
-    }
-    if (uploadedFiles.designImages) {
-      projectToUpdate.designImages = uploadedFiles.designImages.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
-        uploaded_at: currentDate
-      }));
-    }
-    if (uploadedFiles.brochure) {
-      projectToUpdate.brochure = uploadedFiles.brochure.map(doc => ({
-        url: doc.url,
-        key: doc.key,
-        path: doc.path,
-        uploaded_at: currentDate
-      }));
-    }
-
+    
+    console.log('=== FINAL UPDATE DATA SUMMARY ===');
+    console.log('Gallery:', updateData.gallery?.length || 0);
+    console.log('ConstructionProgress:', updateData.constructionProgress?.length || 0);
+    console.log('DesignImages:', updateData.designImages?.length || 0);
+    console.log('Brochure:', updateData.brochure?.length || 0);
+    console.log('HeroImage:', updateData.heroImage ? 'Yes' : 'No');
+    
     // Gọi service
-    const project = await projectService.updateProjectService(id, projectToUpdate);
+    const project = await projectService.updateProjectService(id, updateData);
     
     res.status(StatusCodes.OK).json({
       success: true,
@@ -566,6 +694,48 @@ export const update = async (req, res, next) => {
     next(err);
   }
 };
+
+// Helper function cải tiến để extract key từ URL
+function extractKeyFromUrl(url) {
+  if (!url) return null;
+  
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    
+    // Pattern: /file/bucket-name/folder/file-name
+    const parts = pathname.split('/');
+    
+    // Lấy phần từ "file" trở đi
+    const fileIndex = parts.findIndex(part => part === 'file');
+    if (fileIndex !== -1 && fileIndex + 2 < parts.length) {
+      // Trả về path từ folder trở đi
+      return parts.slice(fileIndex + 2).join('/');
+    }
+    
+    // Fallback: lấy phần cuối cùng
+    return parts[parts.length - 1];
+    
+  } catch (e) {
+    console.error('Error extracting key from URL:', url.substring(0, 100));
+    return null;
+  }
+}
+
+// Helper function để extract key từ URL
+// function extractKeyFromUrl(url) {
+//   if (!url) return null;
+//   try {
+//     // URL pattern: https://.../projects/[key]
+//     const urlObj = new URL(url);
+//     const pathParts = urlObj.pathname.split('/');
+//     // Lấy phần cuối cùng của path
+//     return pathParts[pathParts.length - 1];
+//   } catch (e) {
+//     console.error('Error extracting key from URL:', e);
+//     return null;
+//   }
+// }
 
 export const remove = async (req, res, next) => {
   try {

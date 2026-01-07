@@ -105,6 +105,7 @@ const getProjectBySlugService = async (slug) => {
   }
 };
 
+// services/projectService.js - Sửa hàm updateProjectService
 export const updateProjectService = async (id, projectData) => {
   try {
     const existingProject = await Project.findById(id);
@@ -112,76 +113,121 @@ export const updateProjectService = async (id, projectData) => {
       throw new Error('Project not found');
     }
 
-    const {
-      title,
-      description,
-      status,
-      location,
-      propertyFeatures,
-      specifications,
-      propertyHighlights,
-      specialSections,
-      heroImage,
-      gallery,
-      constructionProgress,
-      designImages,
-      brochure,
-      _hasNewFiles
-    } = projectData;
-
+    console.log('=== UPDATE SERVICE DEBUG ===');
+    
     const updateFields = {
       updatedAt: new Date()
     };
 
-    if (title !== undefined) updateFields.title = title;
-    if (description !== undefined) updateFields.description = description;
-    if (status !== undefined) updateFields.status = status;
-    if (location !== undefined) updateFields.location = location;
-    if (propertyFeatures !== undefined) updateFields.propertyFeatures = propertyFeatures;
-    if (specifications !== undefined) updateFields.specifications = specifications;
-    if (propertyHighlights !== undefined) updateFields.propertyHighlights = propertyHighlights;
-    if (specialSections !== undefined) updateFields.specialSections = specialSections;
+    // Update basic fields
+    const basicFields = [
+      'title', 'description', 'status', 'location',
+      'propertyFeatures', 'specifications', 
+      'propertyHighlights', 'specialSections'
+    ];
+    
+    basicFields.forEach(field => {
+      if (projectData[field] !== undefined) {
+        updateFields[field] = projectData[field];
+      }
+    });
 
-    // Xử lý images mới từ B2
-    if (_hasNewFiles) {
+    // ========== XỬ LÝ TẤT CẢ CÁC LOẠI ẢNH ==========
+    
+    // Hàm helper để xử lý image arrays
+    const processImageArrayField = (fieldName, data) => {
+      if (data[fieldName] !== undefined) {
+        // Filter out blob URLs (chỉ giữ lại URLs từ B2)
+        const validItems = (data[fieldName] || []).filter(item => {
+          if (!item) return false;
+          
+          // Xác định URL
+          let url;
+          if (typeof item === 'object') {
+            url = item.url || item;
+          } else {
+            url = item;
+          }
+          
+          // Chỉ giữ lại URLs đã upload lên B2
+          const isValid = url && !url.startsWith('blob:') && !url.startsWith('data:');
+          if (!isValid && url) {
+            console.log(`Filtering out blob URL from ${fieldName}: ${url.substring(0, 50)}`);
+          }
+          return isValid;
+        });
+        
+        console.log(`${fieldName}: ${validItems.length} valid items`);
+        updateFields[fieldName] = validItems;
+      }
+    };
+    
+    // Process ALL image array fields
+    const imageArrayFields = [
+      'gallery',
+      'constructionProgress', 
+      'designImages',
+      'brochure'
+    ];
+    
+    imageArrayFields.forEach(field => {
+      processImageArrayField(field, projectData);
+    });
+    
+    // Process heroImage (single)
+    if (projectData.heroImage !== undefined) {
+      if (projectData.heroImage) {
+        const heroUrl = typeof projectData.heroImage === 'object' 
+          ? projectData.heroImage.url 
+          : projectData.heroImage;
+        
+        // Chỉ giữ lại nếu không phải blob URL
+        if (heroUrl && !heroUrl.startsWith('blob:') && !heroUrl.startsWith('data:')) {
+          updateFields.heroImage = projectData.heroImage;
+          console.log('HeroImage: Valid');
+        } else {
+          updateFields.heroImage = null;
+          console.log('HeroImage: Filtered out (blob URL)');
+        }
+      } else {
+        updateFields.heroImage = null;
+        console.log('HeroImage: Set to null');
+      }
+    }
+
+    // ========== XỬ LÝ ẢNH MỚI UPLOAD ==========
+    if (projectData._hasNewFiles) {
       // Hàm xóa file từ B2
       const safeDeleteFile = async (fileInfo) => {
         if (!fileInfo || !fileInfo.key) return;
         
         try {
           await deleteMultipleFromB2([fileInfo.key]);
+          console.log(`Deleted old B2 file: ${fileInfo.key.substring(0, 50)}`);
         } catch (deleteError) {
           console.error('Could not delete B2 file:', deleteError.message);
         }
       };
 
-      if (heroImage !== undefined) {
-        if (existingProject.heroImage) {
+      // Xử lý heroImage mới
+      if (projectData.heroImage && updateFields.heroImage) {
+        // Xóa heroImage cũ nếu có
+        if (existingProject.heroImage && existingProject.heroImage.key) {
           await safeDeleteFile(existingProject.heroImage);
         }
-        updateFields.heroImage = heroImage;
       }
 
-      if (gallery && Array.isArray(gallery) && gallery.length > 0) {
-        const existingGallery = existingProject.gallery || [];
-        updateFields.gallery = [...existingGallery, ...gallery];
-      }
-
-      if (constructionProgress && Array.isArray(constructionProgress) && constructionProgress.length > 0) {
-        const existingProgress = existingProject.constructionProgress || [];
-        updateFields.constructionProgress = [...existingProgress, ...constructionProgress];
-      }
-
-      if (designImages && Array.isArray(designImages) && designImages.length > 0) {
-        const existingDesigns = existingProject.designImages || [];
-        updateFields.designImages = [...existingDesigns, ...designImages];
-      }
-
-      if (brochure && Array.isArray(brochure) && brochure.length > 0) {
-        const existingBrochures = existingProject.brochure || [];
-        updateFields.brochure = [...existingBrochures, ...brochure];
-      }
+      // Xử lý các loại ảnh mới khác
+      // (Controller đã merge ảnh mới vào array, nên ở đây chỉ cần lưu)
+      console.log('New files were uploaded, updating image arrays');
     }
+
+    console.log('=== FINAL UPDATE FIELDS ===');
+    console.log('Gallery:', updateFields.gallery?.length || 0);
+    console.log('ConstructionProgress:', updateFields.constructionProgress?.length || 0);
+    console.log('DesignImages:', updateFields.designImages?.length || 0);
+    console.log('Brochure:', updateFields.brochure?.length || 0);
+    console.log('HeroImage:', updateFields.heroImage ? 'Yes' : 'No');
 
     const updatedProject = await Project.findByIdAndUpdate(
       id, 
