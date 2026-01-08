@@ -13,13 +13,6 @@ const allowOrigins = [
   'http://localhost:5174',
   'http://localhost:4173',
   'http://localhost:4174',
-  
-  // Thêm pattern cho tất cả IP local
-  /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // 192.168.x.x
-  /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,   // 10.x.x.x
-  /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:\d+$/, // 172.16.x.x đến 172.31.x.x
-  
-  // Các domain production
   'https://latelia.com',
   'https://admin.latelia.com',
 ];
