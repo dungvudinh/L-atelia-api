@@ -2,6 +2,7 @@ import { Media } from '../models/mediaModel.js';
 import { deleteMultipleFromB2 } from '../config/b2.js';
 
 // Service để tạo media mới
+// services/mediaService.js - createMediaService
 export const createMediaService = async (mediaData) => {
   try {
     const {
@@ -44,10 +45,13 @@ export const createMediaService = async (mediaData) => {
     // Xử lý featured image từ B2
     if (featuredImage) {
       if (typeof featuredImage === 'object' && featuredImage.url) {
+        // ✅ Đảm bảo có đủ các trường bắt buộc
         media.featuredImage = {
           url: featuredImage.url,
-          key: featuredImage.key,
-          filename: featuredImage.filename,
+          key: featuredImage.key || `media-${Date.now()}`,
+          filename: featuredImage.filename || 
+                   featuredImage.url.split('/').pop() || 
+                   `image-${Date.now()}`,
           size: featuredImage.size || 0,
           uploadedAt: featuredImage.uploaded_at || new Date(),
           storage: 'b2'
@@ -65,13 +69,23 @@ export const createMediaService = async (mediaData) => {
       }
     }
 
-    console.log('Creating media with data:', media);
+    console.log('📝 Creating media with data:', media);
     
     // Lưu vào database
     const newMedia = await Media.create(media);
     return newMedia;
   } catch (error) {
-    console.error('Error in createMediaService:', error);
+    console.error('❌ Error in createMediaService:', error);
+    
+    // Log chi tiết lỗi validation
+    if (error.name === 'ValidationError') {
+      console.error('Validation errors:', Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message,
+        value: error.errors[key].value
+      })));
+    }
+    
     throw error;
   }
 };

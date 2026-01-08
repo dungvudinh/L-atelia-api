@@ -8,6 +8,7 @@ import {
 
 // @desc    Upload featured image to B2
 // @route   POST /api/media/upload-featured-image
+// controllers/mediaController.js - uploadFeaturedImage
 export const uploadFeaturedImage = async (req, res) => {
   try {
     if (!req.b2Files || !req.b2Files[0]) {
@@ -22,9 +23,8 @@ export const uploadFeaturedImage = async (req, res) => {
     const uploadResult = {
       url: b2File.url,
       key: b2File.key,
-      path: b2File.path,
-      filename: b2File.filename,
-      size: b2File.size,
+      filename: b2File.filename,      // ✅ Thêm filename
+      size: b2File.size,              // ✅ Thêm size
       uploaded_at: new Date(),
       storage: 'b2'
     };

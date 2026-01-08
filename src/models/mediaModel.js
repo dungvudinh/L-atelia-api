@@ -68,22 +68,24 @@ const mediaSchema = new mongoose.Schema({
     default: 'draft'
   },
   // Thay đổi featuredImage từ String thành Object
-  featuredImage: {
+   featuredImage: {
     url: {
       type: String,
-      required: true
+      required: false  // Không bắt buộc
     },
     key: {
       type: String,
-      required: true
+      required: false
     },
     filename: {
       type: String,
-      required: true
+      required: false,
+      default: ''  // Hoặc thêm default value
     },
     size: {
       type: Number,
-      required: true
+      required: false,
+      default: 0
     },
     uploadedAt: {
       type: Date,
