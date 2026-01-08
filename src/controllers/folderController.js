@@ -397,7 +397,6 @@
 import { StatusCodes } from "http-status-codes";
 import { Folder } from '../models/folderModel.js';
 import { 
-  getStorageStrategy,
   deleteFileFromB2,
   deleteMultipleFromB2
 } from '../config/b2.js';
@@ -516,9 +515,10 @@ export const getFolderById = async (req, res) => {
 
 // @desc    Upload images to folder
 // @route   POST /api/folders/:id/upload
+// @desc    Upload images to folder
+// @route   POST /api/folders/:id/upload
 export const uploadImages = async (req, res) => {
   try {
-    const storageStrategy = getStorageStrategy();
     const { id } = req.params;
     
     if ((!req.files || req.files.length === 0) && (!req.b2Files || req.b2Files.length === 0)) {
@@ -536,68 +536,60 @@ export const uploadImages = async (req, res) => {
       });
     }
 
-    let uploadedImages = [];
-
-    if (storageStrategy === 'b2') {
-      // Sử dụng files đã được upload lên B2
-      console.log('=== B2 UPLOADED FILES ===', req.b2Files);
+    // ✅ Mảng để lưu images đã được lưu với _id
+    const savedImages = [];
+    
+    // Sử dụng files đã được upload lên B2
+    console.log('=== B2 UPLOADED FILES ===', req.b2Files);
+    
+    // ✅ Lưu từng image và lấy kết quả trả về từ addImage
+    for (const b2File of req.b2Files) {
+      const filename = b2File.key.split('/').pop() || `image-${Date.now()}`;
       
-      uploadedImages = req.b2Files.map(b2File => {
-        // Extract filename từ key
-        const filename = b2File.key.split('/').pop() || `image-${Date.now()}`;
+      const imageData = {
+        url: b2File.url,
+        key: b2File.key,
+        filename: filename,
+        size: b2File.size || 0, 
+        uploadedAt: new Date()
+      };
+      
+      console.log('🔄 Processing image:', imageData);
+      
+      try {
+        // ✅ Gọi addImage và lấy image đã được lưu (có _id)
+        const savedImage = await folder.addImage(imageData);
+        savedImages.push(savedImage);
         
-        return {
-          url: b2File.url,
-          key: b2File.key,
-          filename: filename,
-          size:b2File.size, 
-          uploadedAt: new Date()
-        };
-      });
-      console.log('UPLOADED IMAGE', uploadedImages)
-      // Lưu images vào folder
-      for (const image of uploadedImages) {
-        await folder.addImage(image);
-      }
-
-    } else {
-      // Local storage
-      for (const file of req.files) {
-        const imageUrl = `/uploads/folders/${id}/${file.filename}`;
-
-        const imageData = {
-          url: imageUrl,
-          key: file.filename, // Dùng filename làm key cho local
-          filename: file.filename,
-          uploadedAt: new Date()
-        };
-
-        await folder.addImage(imageData);
-        
-        // Lấy ID của image vừa thêm
-        const newImage = folder.images[folder.images.length - 1];
-        uploadedImages.push({
-          _id: newImage._id,
-          ...imageData
-        });
+        console.log('✅ Image saved with ID:', savedImage._id);
+      } catch (addImageError) {
+        console.error('❌ Error adding image:', addImageError);
+        // Tiếp tục với các ảnh khác nếu có lỗi
       }
     }
 
+    console.log('📋 Total saved images:', savedImages.length);
+    console.log('📋 Saved images with IDs:', savedImages.map(img => ({
+      _id: img._id,
+      filename: img.filename
+    })));
+
     // Lấy folder đã được cập nhật
-    const updatedFolder = await Folder.findById(id).populate('parentFolder', 'name');
+    const updatedFolder = await Folder.findById(id)
+      .populate('parentFolder', 'name')
+      .lean(); // ✅ Dùng lean để có plain object
 
     res.status(StatusCodes.OK).json({
       success: true,
       data: {
         folder: updatedFolder,
-        uploadedImages: uploadedImages
+        uploadedImages: savedImages  // ✅ Trả về savedImages có _id
       },
-      message: `Successfully uploaded ${uploadedImages.length} images to folder`,
-      storage: storageStrategy
+      message: `Successfully uploaded ${savedImages.length} images to folder`,
     });
 
   } catch (error) {
-    console.error('Error in uploadImages:', error);
+    console.error('❌ Error in uploadImages:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Upload failed',
@@ -685,7 +677,6 @@ export const updateFolder = async (req, res) => {
 // @route   DELETE /api/folders/:id
 export const removeFolder = async (req, res) => {
   try {
-    const storageStrategy = getStorageStrategy();
     const folder = await Folder.findById(req.params.id);
     
     if (!folder) {
@@ -704,7 +695,7 @@ export const removeFolder = async (req, res) => {
     }
 
     // Xóa images từ B2 nếu có
-    if (storageStrategy === 'b2' && folder.images.length > 0) {
+    if (folder.images.length > 0) {
       try {
         const keysToDelete = folder.images.map(img => img.key);
         
@@ -718,21 +709,18 @@ export const removeFolder = async (req, res) => {
     }
 
     // Xóa thư mục vật lý nếu dùng local storage
-    if (storageStrategy !== 'b2') {
       const fs = await import('fs');
       const folderPath = `uploads/folders/${req.params.id}`;
       if (fs.existsSync(folderPath)) {
         fs.rmSync(folderPath, { recursive: true, force: true });
         console.log(`🗑️ Deleted folder directory: ${folderPath}`);
       }
-    }
 
     await Folder.findByIdAndDelete(req.params.id);
 
     res.status(StatusCodes.OK).json({
       success: true,
       message: 'Folder deleted successfully',
-      storage: storageStrategy
     });
 
   } catch (error) {
@@ -749,7 +737,7 @@ export const removeFolder = async (req, res) => {
 // @route   DELETE /api/folders/:folderId/images/:imageId
 export const deleteImage = async (req, res) => {
   try {
-    const storageStrategy = getStorageStrategy();
+    // const storageStrategy = getStorageStrategy();
     const { folderId, imageId } = req.params;
     console.log('IMAGE ID', imageId)
     const folder = await Folder.findById(folderId);
@@ -770,19 +758,18 @@ export const deleteImage = async (req, res) => {
     }
 
     // Xóa file từ B2 hoặc local
-    if (storageStrategy === 'b2') {
       await deleteFileFromB2(imageToDelete.key);
       console.log(`🗑️ Deleted image from B2: ${imageToDelete.key}`);
-    } else {
-      // Local storage
-      const fs = await import('fs');
-      const path = await import('path');
-      const filePath = path.join('uploads', 'folders', folderId, imageToDelete.filename);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-        console.log(`🗑️ Deleted local file: ${filePath}`);
-      }
-    }
+    // } else {
+    //   // Local storage
+    //   const fs = await import('fs');
+    //   const path = await import('path');
+    //   const filePath = path.join('uploads', 'folders', folderId, imageToDelete.filename);
+    //   if (fs.existsSync(filePath)) {
+    //     fs.unlinkSync(filePath);
+    //     console.log(`🗑️ Deleted local file: ${filePath}`);
+    //   }
+    // }
 
     // Xóa ảnh khỏi folder trong database
     await folder.removeImage(imageId);
@@ -794,7 +781,7 @@ export const deleteImage = async (req, res) => {
       success: true,
       data: updatedFolder,
       message: 'Image deleted successfully',
-      storage: storageStrategy
+      // storage: storageStrategy
     });
 
   } catch (error) {
@@ -811,7 +798,7 @@ export const deleteImage = async (req, res) => {
 // @route   POST /api/folders/:id/images/bulk-delete
 export const bulkDeleteImages = async (req, res) => {
   try {
-    const storageStrategy = getStorageStrategy();
+    // const storageStrategy = getStorageStrategy();
     const { id } = req.params;
     const { imageIds } = req.body;
 
@@ -843,23 +830,22 @@ export const bulkDeleteImages = async (req, res) => {
     }
 
     // Xóa files từ B2 hoặc local
-    if (storageStrategy === 'b2') {
       const keysToDelete = imagesToDelete.map(img => img.key);
       await deleteMultipleFromB2(keysToDelete);
       console.log(`🗑️ Deleted ${keysToDelete.length} images from B2`);
-    } else {
-      // Local storage
-      const fs = await import('fs');
-      const path = await import('path');
+    // } else {
+    //   // Local storage
+    //   const fs = await import('fs');
+    //   const path = await import('path');
       
-      for (const image of imagesToDelete) {
-        const filePath = path.join('uploads', 'folders', id, image.filename);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
-      console.log(`🗑️ Deleted ${imagesToDelete.length} local files`);
-    }
+    //   for (const image of imagesToDelete) {
+    //     const filePath = path.join('uploads', 'folders', id, image.filename);
+    //     if (fs.existsSync(filePath)) {
+    //       fs.unlinkSync(filePath);
+    //     }
+    //   }
+    //   console.log(`🗑️ Deleted ${imagesToDelete.length} local files`);
+    // }
 
     // Xóa ảnh khỏi database
     folder.images = folder.images.filter(img => 
@@ -875,7 +861,6 @@ export const bulkDeleteImages = async (req, res) => {
       success: true,
       data: updatedFolder,
       message: `Successfully deleted ${imagesToDelete.length} images`,
-      storage: storageStrategy
     });
 
   } catch (error) {

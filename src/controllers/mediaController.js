@@ -1,7 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import mediaService from '../services/mediaService.js';
 import { 
-  getStorageStrategy,
   deleteFileFromB2,
   deleteMultipleFromB2
 } from '../config/b2.js';

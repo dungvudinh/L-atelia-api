@@ -95,6 +95,11 @@ const folderSchema = new mongoose.Schema({
   
   // Images trong folder - đơn giản hóa
   images: [{
+    _id: {  // ✅ Thêm field _id
+      type: mongoose.Schema.Types.ObjectId,
+      auto: true,  // Tự động tạo
+      default: () => new mongoose.Types.ObjectId()
+    },
     url: {
       type: String,
       required: true
@@ -133,16 +138,34 @@ folderSchema.index({ name: 1, parentFolder: 1 });
 folderSchema.index({ parentFolder: 1 });
 
 // Method để thêm ảnh
-folderSchema.methods.addImage = function(imageData) {
-  this.images.push(imageData);
-  // Validate thủ công trước khi save
-  const validationError = this.validateSync();
-  if (validationError) {
-    console.log('Validation error before save:', validationError);
-    throw validationError;
+folderSchema.methods.addImage = async function(imageData) {
+  try {
+    console.log('🖼️ Adding image with data:', imageData);
+    
+    // ✅ Tạo image object với _id mới
+    const newImage = {
+      _id: new mongoose.Types.ObjectId(),  // ✅ Tạo _id mới
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size || 0,
+      uploadedAt: imageData.uploadedAt || new Date()
+    };
+    
+    console.log('📝 New image with ID:', newImage._id);
+    
+    // Thêm vào mảng images
+    this.images.push(newImage);
+    
+    // Lưu folder
+    await this.save();
+    
+    console.log('✅ Image saved with ID:', newImage._id);
+    return newImage;  // ✅ Trả về image với _id
+  } catch (error) {
+    console.error('❌ Error in addImage method:', error);
+    throw error;
   }
-  
-  return this.save();
 };
 
 // Method để xóa ảnh
