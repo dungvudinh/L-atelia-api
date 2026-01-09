@@ -11,6 +11,7 @@ import initializeDatabase from './scripts/initialDatabase.js';
 const allowOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:5175',
   'http://localhost:4173',
   'http://localhost:4174',
   'https://latelia.com',
@@ -19,6 +20,35 @@ const allowOrigins = [
 const app = express();
 
 const START_SERVER = () => {
+        app.options('*', (req, res) => {
+        const origin = req.headers.origin;
+        
+        console.log('OPTIONS Request for:', {
+            origin: origin,
+            url: req.url,
+            method: req.method,
+            'access-control-request-method': req.headers['access-control-request-method'],
+            'access-control-request-headers': req.headers['access-control-request-headers']
+        });
+        
+        // Kiểm tra origin
+        if (!origin || allowOrigins.includes(origin)) {
+            res.header('Access-Control-Allow-Origin', origin);
+            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            res.header('Access-Control-Allow-Credentials', 'true');
+            res.header('Access-Control-Max-Age', '86400'); // Cache preflight 24h
+            
+            console.log('OPTIONS Allowed for origin:', origin);
+            return res.status(200).send();
+        } else {
+            console.log('OPTIONS Blocked for origin:', origin);
+            return res.status(403).json({
+                success: false,
+                message: 'CORS not allowed'
+            });
+        }
+    });
     app.use(helmet({
         contentSecurityPolicy: false,
     }));
