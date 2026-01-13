@@ -20,35 +20,35 @@ const allowOrigins = [
 const app = express();
 
 const START_SERVER = () => {
-        app.options('/*', (req, res) => {
-        const origin = req.headers.origin;
+    //     app.options('/*', (req, res) => {
+    //     const origin = req.headers.origin;
         
-        console.log('OPTIONS Request for:', {
-            origin: origin,
-            url: req.url,
-            method: req.method,
-            'access-control-request-method': req.headers['access-control-request-method'],
-            'access-control-request-headers': req.headers['access-control-request-headers']
-        });
+    //     console.log('OPTIONS Request for:', {
+    //         origin: origin,
+    //         url: req.url,
+    //         method: req.method,
+    //         'access-control-request-method': req.headers['access-control-request-method'],
+    //         'access-control-request-headers': req.headers['access-control-request-headers']
+    //     });
         
-        // Kiểm tra origin
-        if (!origin || allowOrigins.includes(origin)) {
-            res.header('Access-Control-Allow-Origin', origin);
-            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-            res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-            res.header('Access-Control-Allow-Credentials', 'true');
-            res.header('Access-Control-Max-Age', '86400'); // Cache preflight 24h
+    //     // Kiểm tra origin
+    //     if (!origin || allowOrigins.includes(origin)) {
+    //         res.header('Access-Control-Allow-Origin', origin);
+    //         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    //         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    //         res.header('Access-Control-Allow-Credentials', 'true');
+    //         res.header('Access-Control-Max-Age', '86400'); // Cache preflight 24h
             
-            console.log('OPTIONS Allowed for origin:', origin);
-            return res.status(200).send();
-        } else {
-            console.log('OPTIONS Blocked for origin:', origin);
-            return res.status(403).json({
-                success: false,
-                message: 'CORS not allowed'
-            });
-        }
-    });
+    //         console.log('OPTIONS Allowed for origin:', origin);
+    //         return res.status(200).send();
+    //     } else {
+    //         console.log('OPTIONS Blocked for origin:', origin);
+    //         return res.status(403).json({
+    //             success: false,
+    //             message: 'CORS not allowed'
+    //         });
+    //     }
+    // });
     app.use(helmet({
         contentSecurityPolicy: false,
     }));
@@ -64,6 +64,8 @@ const START_SERVER = () => {
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH','OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'], 
+        exposedHeaders: ['Content-Length', 'Authorization'],
+        maxAge: 86400 // 24 hours
     }));
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
