@@ -1,3 +1,4 @@
+// server.js - CẬP NHẬT TOÀN BỘ FILE NÀY
 import express from 'express';
 import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
 import AsyncExitHook from 'async-exit-hook';
@@ -16,136 +17,141 @@ const allowOrigins = [
   'http://localhost:4174',
   'https://latelia.com',
   'https://admin.latelia.com',
+  'http://latelia.com', // Thêm http
+  'http://admin.latelia.com', // Thêm http
 ];
+
 const app = express();
 
-const START_SERVER = () => {
-    //     app.options('/*', (req, res) => {
-    //     const origin = req.headers.origin;
-        
-    //     console.log('OPTIONS Request for:', {
-    //         origin: origin,
-    //         url: req.url,
-    //         method: req.method,
-    //         'access-control-request-method': req.headers['access-control-request-method'],
-    //         'access-control-request-headers': req.headers['access-control-request-headers']
-    //     });
-        
-    //     // Kiểm tra origin
-    //     if (!origin || allowOrigins.includes(origin)) {
-    //         res.header('Access-Control-Allow-Origin', origin);
-    //         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    //         res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    //         res.header('Access-Control-Allow-Credentials', 'true');
-    //         res.header('Access-Control-Max-Age', '86400'); // Cache preflight 24h
-            
-    //         console.log('OPTIONS Allowed for origin:', origin);
-    //         return res.status(200).send();
-    //     } else {
-    //         console.log('OPTIONS Blocked for origin:', origin);
-    //         return res.status(403).json({
-    //             success: false,
-    //             message: 'CORS not allowed'
-    //         });
-    //     }
-    // });
-    app.use(helmet({
-        contentSecurityPolicy: false,
-    }));
-    app.use(cookieParser());
-    app.use(cors({
-        origin: function(origin, callback){
-            if (!origin || allowOrigins.includes(origin)) {
-                callback(null, true);
-            } else {
-                callback(new Error("Not allowed by CORS"));
-            }
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH','OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'], 
-        exposedHeaders: ['Content-Length', 'Authorization'],
-        maxAge: 86400 // 24 hours
-    }));
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: true }));
-    
-    // NEW: Serve static files from uploads directory
-    app.use('/uploads', express.static('uploads'));
-    
-    app.use('/v1', APIs_V1);
-    
-    // UPDATED: Enhanced error handling middleware
-    app.use((err, req, res, next) => {
-        const status = err.statusCode || 500;
-        const message = err.message || 'Internal Server Error';
-        console.log('[Error Middleware]', err);
-        
-        // NEW: Handle specific error types
-        if (err.name === 'ValidationError') {
-            return res.status(400).json({
-                success: false,
-                message: 'Validation Error',
-                errors: err.details ? err.details.map(detail => detail.message) : [err.message]
-            });
-        }
-        
-        if (err.name === 'CastError') {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid ID format'
-            });
-        }
-        
-        // NEW: Multer file upload errors
-        if (err.code === 'LIMIT_FILE_SIZE') {
-            return res.status(400).json({
-                success: false,
-                message: 'File too large'
-            });
-        }
-        
-        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-            return res.status(400).json({
-                success: false,
-                message: 'Unexpected file field'
-            });
-        }
-        
-        res.status(status).json({
-            success: false,
-            message: message
-        });
-    });
-    
-    // NEW: 404 handler for undefined routes
-    // app.all('*', (req, res) => {
-    //     res.status(404).json({
-    //         success: false,
-    //         message: 'Route not found'
-    //     });
-    // });
+// ✅ QUAN TRỌNG: Xử lý OPTIONS request ĐẦU TIÊN
+// app.options('*', (req, res) => {
+//   const origin = req.headers.origin;
+  
+//   console.log('🛫 OPTIONS Preflight Request:', {
+//     origin: origin,
+//     url: req.url,
+//     method: req.method
+//   });
+  
+//   // LUÔN trả về success cho preflight
+//   if (origin && allowOrigins.includes(origin)) {
+//     res.header('Access-Control-Allow-Origin', origin);
+//   } else {
+//     res.header('Access-Control-Allow-Origin', '*');
+//   }
+  
+//   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+//   res.header('Access-Control-Allow-Credentials', 'true');
+//   res.header('Access-Control-Max-Age', '86400');
+  
+//   return res.status(200).send();
+// });
 
-    app.listen(env.APP_PORT, '0.0.0.0', () => {
-        console.log(`Server is running on port: ${env.APP_PORT}`);
-    });
+// ✅ CẬP NHẬT Helmet config
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false, // TẮT cái này
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // CHO PHÉP cross-origin
+}));
+
+app.use(cookieParser());
+
+// ✅ CẬP NHẬT CORS middleware
+app.use(cors({
+  origin: function(origin, callback) {
+    // Cho phép requests không có origin (server-to-server, curl)
+    if (!origin) {
+      return callback(null, true);
+    }
     
-    AsyncExitHook(() => {
-        console.log('Disconnecting from Database');
-        CLOSE_DB();
-        console.log('Disconnected from Database');
-    });
+    // Kiểm tra trong danh sách cho phép
+    if (allowOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Cho phép tất cả subdomains của latelia.com
+    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?latelia\.com$/)) {
+      return callback(null, true);
+    }
+    
+    // Cho phép tất cả subdomains của admin.latelia.com  
+    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?admin\.latelia\.com$/)) {
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS Blocked:', origin);
+    return callback(new Error(`Origin ${origin} not allowed`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Version','X-Strategy','X-Client','X-Client-Domain'],
+  exposedHeaders: ['Content-Length', 'Authorization', 'X-Total-Count'],
+  maxAge: 86400
+}));
+
+// ✅ Middleware thêm CORS headers cho mọi response
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Thêm headers cho tất cả responses
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Vary', 'Origin'); // Quan trọng cho cache
+  
+  next();
+});
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static('uploads'));
+app.use('/v1', APIs_V1);
+
+// Error handler - ĐẢM BẢO CORS headers ngay cả khi error
+app.use((err, req, res, next) => {
+  console.log('[Error Middleware]', err.message);
+  
+  // Vẫn thêm CORS headers khi có lỗi
+  const origin = req.headers.origin;
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  const status = err.statusCode || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || 'Internal Server Error'
+  });
+});
+
+const START_SERVER = () => {
+  app.listen(env.APP_PORT, '0.0.0.0', () => {
+    console.log(`
+🚀 Server is running on port: ${env.APP_PORT}
+✅ CORS Allowed Origins:
+${allowOrigins.map(o => `   - ${o}`).join('\n')}
+    `);
+  });
+  
+  AsyncExitHook(() => {
+    console.log('Disconnecting from Database');
+    CLOSE_DB();
+    console.log('Disconnected from Database');
+  });
 };
 
 (async () => {
-    try {
-        console.log('Connecting to Database');
-        await CONNECT_DB();
-        await initializeDatabase();
-        console.log('Connected to Database');
-        START_SERVER();
-    } catch (err) {
-        console.error('Database connection failed:', err);
-        process.exit(1);
-    }
+  try {
+    console.log('Connecting to Database');
+    await CONNECT_DB();
+    await initializeDatabase();
+    console.log('Connected to Database');
+    START_SERVER();
+  } catch (err) {
+    console.error('Database connection failed:', err);
+    process.exit(1);
+  }
 })();
