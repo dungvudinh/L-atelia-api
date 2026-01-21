@@ -356,6 +356,57 @@ export const createProject = async (req, res, next) => {
     if (req.body.data) {
       try {
         projectData = JSON.parse(req.body.data);
+        
+        // ========== QUAN TRỌNG: LOẠI BỎ BLOB URLs TỪ DỮ LIỆU CLIENT ==========
+        // Hàm helper để filter blob và data URLs
+        const filterBlobUrls = (array) => {
+          if (!array || !Array.isArray(array)) return [];
+          return array.filter(item => {
+            if (!item) return false;
+            
+            // Xác định URL
+            let url;
+            if (typeof item === 'object') {
+              url = item.url || '';
+            } else {
+              url = item || '';
+            }
+            
+            // Chỉ giữ lại URLs không phải blob: hoặc data:
+            return url && !url.startsWith('blob:') && !url.startsWith('data:');
+          });
+        };
+        
+        console.log('=== CREATE PROJECT: FILTERING BLOB URLs ===');
+        console.log('Original gallery count:', projectData.gallery?.length || 0);
+        console.log('Original constructionProgress count:', projectData.constructionProgress?.length || 0);
+        console.log('Original designImages count:', projectData.designImages?.length || 0);
+        console.log('Original brochure count:', projectData.brochure?.length || 0);
+        
+        // Filter tất cả các mảng ảnh
+        projectData.gallery = filterBlobUrls(projectData.gallery);
+        projectData.constructionProgress = filterBlobUrls(projectData.constructionProgress);
+        projectData.designImages = filterBlobUrls(projectData.designImages);
+        projectData.brochure = filterBlobUrls(projectData.brochure);
+        
+        console.log('After filtering blob URLs:');
+        console.log('Gallery count:', projectData.gallery?.length || 0);
+        console.log('ConstructionProgress count:', projectData.constructionProgress?.length || 0);
+        console.log('DesignImages count:', projectData.designImages?.length || 0);
+        console.log('Brochure count:', projectData.brochure?.length || 0);
+        
+        // Filter heroImage
+        if (projectData.heroImage) {
+          const heroUrl = typeof projectData.heroImage === 'object' 
+            ? projectData.heroImage.url 
+            : projectData.heroImage;
+          
+          if (heroUrl && (heroUrl.startsWith('blob:') || heroUrl.startsWith('data:'))) {
+            console.log('Filtering out blob heroImage URL');
+            projectData.heroImage = null;
+          }
+        }
+        
       } catch (parseError) {
         console.error('Error parsing JSON data:', parseError);
         return res.status(StatusCodes.BAD_REQUEST).json({
@@ -368,6 +419,8 @@ export const createProject = async (req, res, next) => {
     // Xử lý files từ B2
     let uploadedFiles = {};
     if (req.b2Files && req.b2Files.length > 0) {
+      console.log(`📁 ${req.b2Files.length} files uploaded to B2`);
+      
       // Nhóm files theo fieldname từ req.b2Files
       uploadedFiles = {
         heroImage: req.b2Files.find(file => file.key.includes('heroImage')) || null,
@@ -376,6 +429,13 @@ export const createProject = async (req, res, next) => {
         designImages: req.b2Files.filter(file => file.key.includes('designImages')) || [],
         brochure: req.b2Files.filter(file => file.key.includes('brochure')) || []
       };
+      
+      console.log('Uploaded files by type:');
+      console.log('- HeroImage:', uploadedFiles.heroImage ? 'Yes' : 'No');
+      console.log('- Gallery:', uploadedFiles.gallery.length);
+      console.log('- ConstructionProgress:', uploadedFiles.constructionProgress.length);
+      console.log('- DesignImages:', uploadedFiles.designImages.length);
+      console.log('- Brochure:', uploadedFiles.brochure.length);
     }
 
     // Tạo project data object để truyền vào service
@@ -383,41 +443,87 @@ export const createProject = async (req, res, next) => {
       ...projectData
     };
 
-    // Thêm image URLs vào project data
+    // Thêm image URLs vào project data (CHỈ từ B2, không kết hợp với client data)
     const currentDate = new Date();
     
-    projectToCreate.images = {
+    // QUAN TRỌNG: Chỉ sử dụng files từ B2, không kết hợp với bất kỳ dữ liệu nào từ client
+    // vì client data chỉ chứa blob URLs (đã được filter ở trên) hoặc empty
+    const imagesConfig = {
       heroImage: uploadedFiles.heroImage ? {
         url: uploadedFiles.heroImage.url,
         key: uploadedFiles.heroImage.key,
         path: uploadedFiles.heroImage.path,
-        uploaded_at: currentDate
+        uploaded_at: currentDate,
+        name: uploadedFiles.heroImage.originalname,
+        type: uploadedFiles.heroImage.mimetype
       } : null,
+      
       gallery: uploadedFiles.gallery ? uploadedFiles.gallery.map(img => ({
         url: img.url,
         key: img.key,
         path: img.path,
-        uploaded_at: currentDate
+        uploaded_at: currentDate,
+        name: img.originalname,
+        type: img.mimetype
       })) : [],
+      
       constructionProgress: uploadedFiles.constructionProgress ? uploadedFiles.constructionProgress.map(img => ({
         url: img.url,
         key: img.key,
         path: img.path,
-        uploaded_at: currentDate
+        uploaded_at: currentDate,
+        name: img.originalname,
+        type: img.mimetype
       })) : [],
+      
       designImages: uploadedFiles.designImages ? uploadedFiles.designImages.map(img => ({
         url: img.url,
         key: img.key,
         path: img.path,
-        uploaded_at: currentDate
+        uploaded_at: currentDate,
+        name: img.originalname,
+        type: img.mimetype
       })) : [],
+      
       brochure: uploadedFiles.brochure ? uploadedFiles.brochure.map(doc => ({
         url: doc.url,
         key: doc.key,
         path: doc.path,
-        uploaded_at: currentDate
+        uploaded_at: currentDate,
+        name: doc.originalname,
+        type: doc.mimetype
       })) : []
     };
+
+    // Ghi đè các fields ảnh trong projectToCreate với chỉ URLs từ B2
+    projectToCreate.heroImage = imagesConfig.heroImage;
+    projectToCreate.gallery = imagesConfig.gallery;
+    projectToCreate.constructionProgress = imagesConfig.constructionProgress;
+    projectToCreate.designImages = imagesConfig.designImages;
+    projectToCreate.brochure = imagesConfig.brochure;
+    
+    // DEBUG: Kiểm tra dữ liệu cuối cùng
+    console.log('=== FINAL PROJECT DATA FOR CREATE ===');
+    console.log('Basic info:', {
+      title: projectToCreate.title,
+      descriptionLength: projectToCreate.description?.length,
+      location: projectToCreate.location
+    });
+    console.log('Images summary:');
+    console.log('- HeroImage:', projectToCreate.heroImage ? 'Has image' : 'No image');
+    console.log('- Gallery count:', projectToCreate.gallery?.length || 0);
+    console.log('- ConstructionProgress count:', projectToCreate.constructionProgress?.length || 0);
+    console.log('- DesignImages count:', projectToCreate.designImages?.length || 0);
+    console.log('- Brochure count:', projectToCreate.brochure?.length || 0);
+    
+    // Kiểm tra nếu không có ảnh nào (bao gồm cả heroImage)
+    if (!projectToCreate.heroImage && 
+        projectToCreate.gallery.length === 0 &&
+        projectToCreate.constructionProgress.length === 0 &&
+        projectToCreate.designImages.length === 0 &&
+        projectToCreate.brochure.length === 0) {
+      console.log('⚠️ Warning: Project created with no images');
+    }
 
     // Gọi service
     const project = await projectService.createProjectService(projectToCreate);

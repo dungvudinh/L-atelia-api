@@ -145,36 +145,147 @@ class B2UploadService {
   }
 
   async deleteFromB2(fileKey) {
+  try {
+    // BƯỚC 1: Lấy tất cả versions của file
+    const listParams = {
+      Bucket: this.bucketName,
+      Prefix: fileKey
+    };
+    
+    const versions = await s3.listObjectVersions(listParams).promise();
+    const objectsToDelete = [];
+    
+    if (versions.Versions) {
+      versions.Versions.forEach(version => {
+        objectsToDelete.push({
+          Key: version.Key,
+          VersionId: version.VersionId
+        });
+      });
+    }
+    
+    if (versions.DeleteMarkers) {
+      versions.DeleteMarkers.forEach(marker => {
+        objectsToDelete.push({
+          Key: marker.Key,
+          VersionId: marker.VersionId
+        });
+      });
+    }
+    
+    // BƯỚC 2: Xóa tất cả versions
+    if (objectsToDelete.length > 0) {
+      const deleteParams = {
+        Bucket: this.bucketName,
+        Delete: {
+          Objects: objectsToDelete,
+          Quiet: true
+        }
+      };
+      
+      await s3.deleteObjects(deleteParams).promise();
+      console.log(`🗑️ Permanently deleted ${objectsToDelete.length} versions of: ${fileKey}`);
+    }
+    
+    return { 
+      success: true, 
+      message: 'File permanently deleted from B2' 
+    };
+    
+  } catch (error) {
+    console.error('❌ B2 Delete error:', error);
+    
+    // Fallback: thử xóa version hiện tại nếu lỗi
     try {
-      const params = {
+      const fallbackParams = {
         Bucket: this.bucketName,
         Key: fileKey
       };
-
-      await s3.deleteObject(params).promise();
-      return { success: true, message: 'File deleted from B2' };
-    } catch (error) {
-      console.error('❌ B2 Delete error:', error);
-      throw new Error(`B2 Delete failed: ${error.message}`);
+      
+      await s3.deleteObject(fallbackParams).promise();
+      console.log(`🗑️ Deleted current version (soft delete) of: ${fileKey}`);
+      
+      return { 
+        success: true, 
+        message: 'File soft-deleted from B2 (may become hidden version)' 
+      };
+    } catch (fallbackError) {
+      throw new Error(`B2 delete failed: ${error.message}`);
     }
   }
+}
 
   async deleteMultipleFromB2(fileKeys) {
-    try {
-      const objects = fileKeys.map(key => ({ Key: key }));
-      
-      const params = {
-        Bucket: this.bucketName,
-        Delete: { Objects: objects }
-      };
-
-      await s3.deleteObjects(params).promise();
-      return { success: true, message: 'Files deleted from B2' };
-    } catch (error) {
-      console.error('❌ B2 Delete multiple error:', error);
-      throw new Error(`B2 Delete multiple failed: ${error.message}`);
+  try {
+    // BƯỚC 1: Lấy tất cả versions của từng file
+    const allVersions = [];
+    
+    for (const fileKey of fileKeys) {
+      try {
+        // Lấy tất cả object versions
+        const listParams = {
+          Bucket: this.bucketName,
+          Prefix: fileKey
+        };
+        
+        const versions = await s3.listObjectVersions(listParams).promise();
+        
+        if (versions.Versions) {
+          versions.Versions.forEach(version => {
+            allVersions.push({
+              Key: version.Key,
+              VersionId: version.VersionId
+            });
+          });
+        }
+        
+        if (versions.DeleteMarkers) {
+          versions.DeleteMarkers.forEach(marker => {
+            allVersions.push({
+              Key: marker.Key,
+              VersionId: marker.VersionId
+            });
+          });
+        }
+      } catch (listError) {
+        console.warn(`⚠️ Could not list versions for ${fileKey}:`, listError.message);
+        // Fallback: xóa version hiện tại
+        allVersions.push({
+          Key: fileKey
+        });
+      }
     }
+    
+    // BƯỚC 2: Xóa tất cả versions
+    if (allVersions.length > 0) {
+      // Chia thành các batch nhỏ (tối đa 1000 objects mỗi request)
+      const batchSize = 1000;
+      for (let i = 0; i < allVersions.length; i += batchSize) {
+        const batch = allVersions.slice(i, i + batchSize);
+        
+        const deleteParams = {
+          Bucket: this.bucketName,
+          Delete: {
+            Objects: batch,
+            Quiet: true
+          }
+        };
+        
+        await s3.deleteObjects(deleteParams).promise();
+        console.log(`🗑️ Permanently deleted batch ${i/batchSize + 1}: ${batch.length} versions`);
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: `Permanently deleted ${allVersions.length} file versions from B2` 
+    };
+    
+  } catch (error) {
+    console.error('❌ B2 Delete multiple error:', error);
+    throw new Error(`B2 permanent delete failed: ${error.message}`);
   }
+}
 }
 
 const b2UploadService = new B2UploadService();
