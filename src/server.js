@@ -1,107 +1,132 @@
-// server.js
+// server.js - CẬP NHẬT TOÀN BỘ FILE NÀY
 import express from 'express';
+import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
+import AsyncExitHook from 'async-exit-hook';
+import { env } from './config/environment.js';
+import APIs_V1 from './routes/v1/index.js';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
-import AsyncExitHook from 'async-exit-hook';
-
-import { CONNECT_DB, CLOSE_DB } from './config/mongodb.js';
-import { env } from './config/environment.js';
-import APIs_V1 from './routes/v1/index.js';
 import initializeDatabase from './scripts/initialDatabase.js';
 
-const app = express();
-
-/* ==================== ALLOWED ORIGINS ==================== */
-const ALLOWED_ORIGINS = [
+const allowOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',
+  'http://localhost:4173',
+  'http://localhost:4174',
+  'https://latelia.com',
   'https://admin.latelia.com',
-  'https://latelia.com'
+  'http://latelia.com', // Thêm http
+  'http://admin.latelia.com', // Thêm http
 ];
 
-/* ==================== SECURITY ==================== */
+const app = express();
+
+// ✅ CẬP NHẬT Helmet config
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' }
+  crossOriginEmbedderPolicy: false, // TẮT cái này
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // CHO PHÉP cross-origin
 }));
 
 app.use(cookieParser());
 
-/* ==================== CORS (🔥 QUAN TRỌNG NHẤT) ==================== */
+// ✅ CẬP NHẬT CORS middleware
 app.use(cors({
-  origin: (origin, callback) => {
-    // Cho phép server-to-server / curl
-    if (!origin) return callback(null, true);
-
-    if (ALLOWED_ORIGINS.includes(origin)) {
-      return callback(null, origin);
+  origin: function(origin, callback) {
+    // Cho phép requests không có origin (server-to-server, curl)
+    if (!origin) {
+      return callback(null, true);
     }
-
-    console.error('❌ CORS blocked origin:', origin);
-    return callback(new Error('Not allowed by CORS'));
+    
+    // Kiểm tra trong danh sách cho phép
+    if (allowOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Cho phép tất cả subdomains của latelia.com
+    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?latelia\.com$/)) {
+      return callback(null, true);
+    }
+    
+    // Cho phép tất cả subdomains của admin.latelia.com  
+    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?admin\.latelia\.com$/)) {
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS Blocked:', origin);
+    return callback(new Error(`Origin ${origin} not allowed`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: '*'
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Version','X-Strategy','X-Client','X-Client-Domain'],
+  exposedHeaders: ['Content-Length', 'Authorization', 'X-Total-Count'],
+  maxAge: 86400
 }));
 
-/* ==================== PREFLIGHT SAFE HANDLER ==================== */
-// ❗ KHÔNG dùng app.options()
-// ❗ Cách này tương thích Node 23 + Express mới
+// ✅ Middleware thêm CORS headers cho mọi response
 app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
+  const origin = req.headers.origin;
+  
+  // Thêm headers cho tất cả responses
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
   }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Vary', 'Origin'); // Quan trọng cho cache
+  
   next();
 });
 
-/* ==================== BODY PARSER ==================== */
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-/* ==================== ROUTES ==================== */
+app.use('/uploads', express.static('uploads'));
 app.use('/v1', APIs_V1);
 
-/* ==================== ERROR HANDLER (GIỮ CORS HEADER) ==================== */
+// Error handler - ĐẢM BẢO CORS headers ngay cả khi error
 app.use((err, req, res, next) => {
-  console.error('[ERROR]', err.message);
-
+  console.log('[Error Middleware]', err.message);
+  
+  // Vẫn thêm CORS headers khi có lỗi
   const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
   }
-
-  res.status(500).json({
+  
+  const status = err.statusCode || 500;
+  res.status(status).json({
     success: false,
     message: err.message || 'Internal Server Error'
   });
 });
 
-/* ==================== START SERVER ==================== */
-const START_SERVER = async () => {
-  try {
-    await CONNECT_DB();
-    await initializeDatabase();
-
-    app.listen(env.APP_PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${env.APP_PORT}`);
-      console.log('✅ Allowed origins:');
-      ALLOWED_ORIGINS.forEach(o => console.log('  -', o));
-    });
-
-    AsyncExitHook(async () => {
-      await CLOSE_DB();
-      console.log('🛑 DB disconnected');
-    });
-
-  } catch (err) {
-    console.error('❌ Server start failed:', err);
-    process.exit(1);
-  }
+const START_SERVER = () => {
+  app.listen(env.APP_PORT, '0.0.0.0', () => {
+    console.log(`
+🚀 Server is running on port: ${env.APP_PORT}
+✅ CORS Allowed Origins:
+${allowOrigins.map(o => `   - ${o}`).join('\n')}
+    `);
+  });
+  
+  AsyncExitHook(() => {
+    console.log('Disconnecting from Database');
+    CLOSE_DB();
+    console.log('Disconnected from Database');
+  });
 };
 
-START_SERVER();
+(async () => {
+  try {
+    console.log('Connecting to Database');
+    await CONNECT_DB();
+    await initializeDatabase();
+    console.log('Connected to Database');
+    START_SERVER();
+  } catch (err) {
+    console.error('Database connection failed:', err);
+    process.exit(1);
+  }
+})();
