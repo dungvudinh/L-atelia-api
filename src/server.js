@@ -23,30 +23,7 @@ const allowOrigins = [
 
 const app = express();
 
-// ✅ QUAN TRỌNG: Xử lý OPTIONS request ĐẦU TIÊN
-// app.options('*', (req, res) => {
-//   const origin = req.headers.origin;
-  
-//   console.log('🛫 OPTIONS Preflight Request:', {
-//     origin: origin,
-//     url: req.url,
-//     method: req.method
-//   });
-  
-//   // LUÔN trả về success cho preflight
-//   if (origin && allowOrigins.includes(origin)) {
-//     res.header('Access-Control-Allow-Origin', origin);
-//   } else {
-//     res.header('Access-Control-Allow-Origin', '*');
-//   }
-  
-//   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-//   res.header('Access-Control-Allow-Credentials', 'true');
-//   res.header('Access-Control-Max-Age', '86400');
-  
-//   return res.status(200).send();
-// });
+
 
 // ✅ CẬP NHẬT Helmet config
 app.use(helmet({
@@ -59,36 +36,34 @@ app.use(cookieParser());
 
 // ✅ CẬP NHẬT CORS middleware
 app.use(cors({
-  origin: function(origin, callback) {
-    // Cho phép requests không có origin (server-to-server, curl)
-    if (!origin) {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowOrigins.includes(origin)) return callback(null, true);
+
+    if (/^https?:\/\/([a-zA-Z0-9-]+\.)?latelia\.com$/.test(origin)) {
       return callback(null, true);
     }
-    
-    // Kiểm tra trong danh sách cho phép
-    if (allowOrigins.includes(origin)) {
+
+    if (/^https?:\/\/([a-zA-Z0-9-]+\.)?admin\.latelia\.com$/.test(origin)) {
       return callback(null, true);
     }
-    
-    // Cho phép tất cả subdomains của latelia.com
-    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?latelia\.com$/)) {
-      return callback(null, true);
-    }
-    
-    // Cho phép tất cả subdomains của admin.latelia.com  
-    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?admin\.latelia\.com$/)) {
-      return callback(null, true);
-    }
-    
-    console.log('❌ CORS Blocked:', origin);
+
     return callback(new Error(`Origin ${origin} not allowed`));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Version','X-Strategy','X-Client','X-Client-Domain'],
-  exposedHeaders: ['Content-Length', 'Authorization', 'X-Total-Count'],
-  maxAge: 86400
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-Client-Version',
+    'X-Strategy',
+    'X-Client',
+    'X-Client-Domain'
+  ]
 }));
+;
 
 // ✅ Middleware thêm CORS headers cho mọi response
 app.use((req, res, next) => {
