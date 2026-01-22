@@ -23,6 +23,8 @@ const allowOrigins = [
 
 const app = express();
 
+
+
 // ✅ CẬP NHẬT Helmet config
 app.use(helmet({
   contentSecurityPolicy: false,
