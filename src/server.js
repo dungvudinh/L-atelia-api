@@ -1,4 +1,4 @@
-// server.js - CẬP NHẬT TOÀN BỘ FILE NÀY
+// server.js - CẬP NHẬT ĐỂ XỬ LÝ CORS ĐÚNG CÁCH
 import express from 'express';
 import { CONNECT_DB, GET_DB, CLOSE_DB } from './config/mongodb.js';
 import AsyncExitHook from 'async-exit-hook';
@@ -17,80 +17,158 @@ const allowOrigins = [
   'http://localhost:4174',
   'https://latelia.com',
   'https://admin.latelia.com',
-  'http://latelia.com', // Thêm http
-  'http://admin.latelia.com', // Thêm http
+  'http://latelia.com',
+  'http://admin.latelia.com',
+  // Render.com service URL (quan trọng)
+  'https://l-atelia-api-yct5.onrender.com'
 ];
 
 const app = express();
 
-
-
-// ✅ CẬP NHẬT Helmet config
+// ==================== HELMET CONFIG ====================
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false, // TẮT cái này
-  crossOriginResourcePolicy: { policy: "cross-origin" }, // CHO PHÉP cross-origin
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
 app.use(cookieParser());
 
-// ✅ CẬP NHẬT CORS middleware
+// ==================== CORS CONFIGURATION ====================
+// Cách 1: Dùng cors middleware đơn giản nhất
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // Cho phép requests không có origin (server-to-server, curl)
-    if (!origin) {
-      return callback(null, true);
-    }
+    if (!origin) return callback(null, true);
     
-    // Kiểm tra trong danh sách cho phép
+    // Cho phép tất cả các origins trong danh sách
     if (allowOrigins.includes(origin)) {
       return callback(null, true);
     }
     
     // Cho phép tất cả subdomains của latelia.com
-    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?latelia\.com$/)) {
+    if (origin.endsWith('.latelia.com')) {
       return callback(null, true);
     }
     
-    // Cho phép tất cả subdomains của admin.latelia.com  
-    if (origin.match(/^https?:\/\/([a-zA-Z0-9-]+\.)?admin\.latelia\.com$/)) {
-      return callback(null, true);
-    }
-    
-    console.log('❌ CORS Blocked:', origin);
-    return callback(new Error(`Origin ${origin} not allowed`));
+    console.log(`❌ CORS blocked: ${origin}`);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Version','X-Strategy','X-Client','X-Client-Domain'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-Client',
+    'X-Strategy',
+    'X-Client-Version',
+    'X-Client-Domain',
+    'Accept',
+    'Origin'
+  ],
   exposedHeaders: ['Content-Length', 'Authorization', 'X-Total-Count'],
-  maxAge: 86400
+  maxAge: 86400, // Cache preflight 24h
+  optionsSuccessStatus: 204
 }));
 
-// ✅ Middleware thêm CORS headers cho mọi response
+// ==================== LOGGING MIDDLEWARE ====================
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  const method = req.method;
+  const path = req.path;
   
-  // Thêm headers cho tất cả responses
-  if (origin && allowOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
+  console.log(`🌐 ${method} ${path} from ${origin || 'no-origin'}`);
+  
+  // Log headers cho OPTIONS requests để debug
+  if (method === 'OPTIONS') {
+    console.log('🛫 Preflight request headers:', {
+      'Access-Control-Request-Method': req.headers['access-control-request-method'],
+      'Access-Control-Request-Headers': req.headers['access-control-request-headers'],
+      Origin: req.headers.origin
+    });
   }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Vary', 'Origin'); // Quan trọng cho cache
   
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ==================== XỬ LÝ PREFLIGHT THEO CÁCH KHÁC ====================
+// Middleware xử lý preflight riêng
+app.use((req, res, next) => {
+  // Nếu là OPTIONS request (preflight)
+  if (req.method === 'OPTIONS') {
+    const origin = req.headers.origin;
+    
+    // Kiểm tra origin
+    if (origin && allowOrigins.some(allowed => 
+      origin === allowed || origin.endsWith('.latelia.com')
+    )) {
+      // Set CORS headers
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 
+        req.headers['access-control-request-headers'] || 
+        'Content-Type, Authorization, X-Requested-With, X-Client, X-Strategy'
+      );
+      res.header('Access-Control-Max-Age', '86400');
+      res.header('Vary', 'Origin');
+    }
+    
+    return res.status(204).end(); // No content
+  }
+  
+  next();
+});
+
+// ==================== BODY PARSER ====================
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static('uploads'));
+
+// ==================== ROUTES ====================
 app.use('/v1', APIs_V1);
 
-// Error handler - ĐẢM BẢO CORS headers ngay cả khi error
-app.use((err, req, res, next) => {
-  console.log('[Error Middleware]', err.message);
+// ==================== HEALTH CHECK ====================
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: env.NODE_ENV || 'development',
+    cors: {
+      allowedOrigins: allowOrigins,
+      currentOrigin: req.headers.origin
+    }
+  });
+});
+
+// ==================== CORS TEST ENDPOINT ====================
+app.get('/cors-test', (req, res) => {
+  const origin = req.headers.origin;
   
-  // Vẫn thêm CORS headers khi có lỗi
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  res.json({
+    success: true,
+    message: 'CORS test successful',
+    origin: origin,
+    timestamp: new Date().toISOString(),
+    headers: {
+      origin: req.headers.origin,
+      'x-client': req.headers['x-client'],
+      'x-strategy': req.headers['x-strategy']
+    }
+  });
+});
+
+// ==================== ERROR HANDLER ====================
+app.use((err, req, res, next) => {
+  console.error('[Error Middleware]', err.message);
+  
+  // Thêm CORS headers ngay cả khi error
   const origin = req.headers.origin;
   if (origin && allowOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
@@ -100,18 +178,41 @@ app.use((err, req, res, next) => {
   const status = err.statusCode || 500;
   res.status(status).json({
     success: false,
-    message: err.message || 'Internal Server Error'
+    message: err.message || 'Internal Server Error',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// ==================== 404 HANDLER ====================
+app.use((req, res) => {
+  const origin = req.headers.origin;
+  
+  if (origin && allowOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.path,
+    method: req.method
   });
 });
 
 const START_SERVER = () => {
-  app.listen(env.APP_PORT, '0.0.0.0', () => {
+  const server = app.listen(env.APP_PORT || 10000, '0.0.0.0', () => {
     console.log(`
-🚀 Server is running on port: ${env.APP_PORT}
+🚀 Server is running on port: ${env.APP_PORT || 10000}
+🌍 Environment: ${env.NODE_ENV || 'development'}
 ✅ CORS Allowed Origins:
 ${allowOrigins.map(o => `   - ${o}`).join('\n')}
+📊 Health Check: https://l-atelia-api-yct5.onrender.com/health
+🔍 CORS Test: https://l-atelia-api-yct5.onrender.com/cors-test
     `);
   });
+
+  server.timeout = 300000;
   
   AsyncExitHook(() => {
     console.log('Disconnecting from Database');
@@ -122,13 +223,13 @@ ${allowOrigins.map(o => `   - ${o}`).join('\n')}
 
 (async () => {
   try {
-    console.log('Connecting to Database');
+    console.log('Connecting to Database...');
     await CONNECT_DB();
     await initializeDatabase();
-    console.log('Connected to Database');
+    console.log('✅ Connected to Database');
     START_SERVER();
   } catch (err) {
-    console.error('Database connection failed:', err);
+    console.error('❌ Database connection failed:', err);
     process.exit(1);
   }
 })();
