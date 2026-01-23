@@ -1,44 +1,43 @@
 import { Project } from '../models/projectModel.js';
 import { deleteMultipleFromB2 } from '../config/b2.js';
 
+// services/projectService.js - Sửa hàm createProjectService
 export const createProjectService = async (projectData) => {
   try {
-    const {
-      title,
-      description,
-      status,
-      location,
-      propertyFeatures,
-      specifications,
-      propertyHighlights,
-      specialSections,
-      images
-    } = projectData;
-
-    // Tạo project object
-    const project = {
-      title,
-      description,
-      status: status || 'draft',
-      location,
-      propertyFeatures: propertyFeatures || [],
-      specifications: specifications || [],
-      propertyHighlights: propertyHighlights || [],
-      specialSections: specialSections || [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    // Xử lý images từ B2
-    project.heroImage = images?.heroImage || null;
-    project.gallery = images?.gallery || [];
-    project.constructionProgress = images?.constructionProgress || [];
-    project.designImages = images?.designImages || [];
-    project.brochure = images?.brochure || [];
+    // Tạo project object với tất cả dữ liệu
+    const project = new Project({
+      title: projectData.title,
+      description: projectData.description,
+      status: projectData.status || 'draft',
+      location: projectData.location,
+      propertyFeatures: projectData.propertyFeatures || [],
+      specifications: projectData.specifications || [],
+      propertyHighlights: projectData.propertyHighlights || [],
+      specialSections: projectData.specialSections || [],
+      
+      // Ảnh đã được xử lý ở controller
+      heroImage: projectData.heroImage || null,
+      gallery: projectData.gallery || [],
+      constructionProgress: projectData.constructionProgress || [],
+      designImages: projectData.designImages || [],
+      brochure: projectData.brochure || [],
+      
+      createdAt: projectData.createdAt || new Date(),
+      updatedAt: projectData.updatedAt || new Date()
+    });
+    
+    console.log('=== SAVING PROJECT TO DATABASE ===');
+    console.log('HeroImage:', project.heroImage ? 'Yes' : 'No');
+    console.log('Gallery:', project.gallery.length);
+    console.log('ConstructionProgress:', project.constructionProgress.length);
+    console.log('DesignImages:', project.designImages.length);
+    console.log('Brochure:', project.brochure.length);
     
     // Lưu vào database
-    const newProject = await Project.create(project);
-    return newProject;
+    const savedProject = await project.save();
+    
+    console.log('✅ Project saved with ID:', savedProject._id);
+    return savedProject;
   } catch (error) {
     console.error('Error in createProjectService:', error);
     throw error;

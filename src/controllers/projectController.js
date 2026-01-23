@@ -1,355 +1,10 @@
-// import { StatusCodes } from "http-status-codes";
-// import projectService from "../services/projectService.js";
-// import { 
-//     uploadProjectFiles,
-//     deleteMultipleFromCloudinary
-// } from '../config/cloudinary.js';
-
-// export const createProject = async (req, res, next) => {
-//   try {
-//     console.log('=== REQUEST BODY ===', req.body);
-//     console.log('=== REQUEST FILES ===', req.files);
-    
-//     // Parse JSON data từ field 'data'
-//     let projectData = {};
-//     if (req.body.data) {
-//       try {
-//         projectData = JSON.parse(req.body.data);
-//         console.log('=== PARSED PROJECT DATA ===', projectData);
-//       } catch (parseError) {
-//         console.error('Error parsing JSON data:', parseError);
-//         return res.status(StatusCodes.BAD_REQUEST).json({
-//           success: false,
-//           message: 'Invalid JSON data format'
-//         });
-//       }
-//     }
-
-//     // Xử lý files - Upload lên Cloudinary nếu có files
-//     let uploadedFiles = {};
-//     if (req.files && Object.keys(req.files).length > 0) {
-//       try {
-//         if (process.env.USE_CLOUDINARY === 'true') {
-//           console.log('FILES', req.files)
-//           // Upload lên Cloudinary
-//           uploadedFiles = await uploadProjectFiles(req.files);
-//         } else {
-//           // Local storage - giữ nguyên structure
-//           uploadedFiles = {
-//             heroImage: req.files['heroImage'] ? req.files['heroImage'][0] : null,
-//             gallery: req.files['gallery'] || [],
-//             constructionProgress: req.files['constructionProgress'] || [],
-//             designImages: req.files['designImages'] || [],
-//             brochure: req.files['brochure'] || []
-//           };
-//         }
-//       } catch (uploadError) {
-//         console.error('File upload error:', uploadError);
-//         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-//           success: false,
-//           message: 'File upload failed: ' + uploadError.message
-//         });
-//       }
-//     }
-
-//     // Tạo project data object để truyền vào service
-//     const projectToCreate = {
-//       ...projectData
-//     };
-
-//     // Thêm image URLs vào project data DƯỚI DẠNG OBJECT {url, uploaded_at}
-//     if (process.env.USE_CLOUDINARY === 'true') {
-//       // Cloudinary - sử dụng URLs và thêm uploaded_at
-//       const currentDate = new Date();
-      
-//       projectToCreate.images = {
-//         heroImage: uploadedFiles.heroImage ? {
-//           url: uploadedFiles.heroImage.url,
-//           uploaded_at: currentDate
-//         } : null,
-//         gallery: uploadedFiles.gallery ? uploadedFiles.gallery.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         })) : [],
-//         constructionProgress: uploadedFiles.constructionProgress ? uploadedFiles.constructionProgress.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         })) : [],
-//         designImages: uploadedFiles.designImages ? uploadedFiles.designImages.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         })) : [],
-//         brochure: uploadedFiles.brochure ? uploadedFiles.brochure.map(doc => ({
-//           url: doc.url,
-//           uploaded_at: currentDate
-//         })) : []
-//       };
-//     } else {
-//       // Local storage - giữ nguyên file objects (sẽ được convert trong service)
-//       projectToCreate.files = uploadedFiles;
-//     }
-
-//     console.log('=== FINAL PROJECT DATA FOR SERVICE ===', projectToCreate);
-
-//     // Gọi service
-//     const project = await projectService.createProjectService(projectToCreate);
-    
-//     res.status(StatusCodes.CREATED).json({
-//       success: true,
-//       message: 'Create project successfully',
-//       data: project
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// // Các hàm khác giữ nguyên...
-// export const getProjects = async (req, res, next) => {
-//   try {
-//     const filters = {
-//       search: req.query.search,
-//       status: req.query.status,
-//       page: req.query.page,
-//       limit: req.query.limit
-//     };
-    
-//     const result = await projectService.getProjectsService(filters);
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       data: result
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// export const getProjectById = async (req, res, next) => {
-//   try {
-//     const project = await projectService.getProjectByIdService(req.params.id);
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       data: project
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// export const getProjectBySlug = async (req, res, next) => {
-//   try {
-//     const project = await projectService.getProjectBySlugService(req.params.slug);
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       data: project
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// export const update = async (req, res, next) => {
-//   try {
-//     console.log('=== UPDATE REQUEST BODY ===', req.body);
-//     console.log('=== UPDATE REQUEST FILES ===', req.files);
-    
-//     const { id } = req.params;
-    
-//     // Parse JSON data từ field 'data'
-//     let updateData = {};
-//     if (req.body.data) {
-//       try {
-//         updateData = JSON.parse(req.body.data);
-//         console.log('=== PARSED UPDATE DATA ===', updateData);
-//       } catch (parseError) {
-//         console.error('Error parsing JSON data:', parseError);
-//         return res.status(StatusCodes.BAD_REQUEST).json({
-//           success: false,
-//           message: 'Invalid JSON data format'
-//         });
-//       }
-//     }
-
-//     // Xử lý files mới
-//     let uploadedFiles = {};
-//     if (req.files && Object.keys(req.files).length > 0) {
-//       try {
-//         if (process.env.USE_CLOUDINARY === 'true') {
-//           uploadedFiles = await uploadProjectFiles(req.files);
-//           console.log('=== CLOUDINARY UPDATE UPLOAD RESULTS ===', uploadedFiles);
-//         } else {
-//           uploadedFiles = {
-//             heroImage: req.files['heroImage'] ? req.files['heroImage'][0] : null,
-//             gallery: req.files['gallery'] || [],
-//             constructionProgress: req.files['constructionProgress'] || [],
-//             designImages: req.files['designImages'] || [],
-//             brochure: req.files['brochure'] || []
-//           };
-//         }
-//       } catch (uploadError) {
-//         console.error('File upload error:', uploadError);
-//         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-//           success: false,
-//           message: 'File upload failed: ' + uploadError.message
-//         });
-//       }
-//     }
-
-//     // Tạo update data object
-//     const projectToUpdate = {
-//       ...updateData,
-//       _hasNewFiles: Object.keys(uploadedFiles).length > 0
-//     };
-
-//     // Thêm files mới vào update data DƯỚI DẠNG OBJECT {url, uploaded_at}
-//     if (process.env.USE_CLOUDINARY === 'true') {
-//       const currentDate = new Date();
-      
-//       if (uploadedFiles.heroImage) {
-//         projectToUpdate.heroImage = {
-//           url: uploadedFiles.heroImage.url,
-//           uploaded_at: currentDate
-//         };
-//       }
-//       if (uploadedFiles.gallery) {
-//         projectToUpdate.gallery = uploadedFiles.gallery.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         }));
-//       }
-//       if (uploadedFiles.constructionProgress) {
-//         projectToUpdate.constructionProgress = uploadedFiles.constructionProgress.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         }));
-//       }
-//       if (uploadedFiles.designImages) {
-//         projectToUpdate.designImages = uploadedFiles.designImages.map(img => ({
-//           url: img.url,
-//           uploaded_at: currentDate
-//         }));
-//       }
-//       if (uploadedFiles.brochure) {
-//         projectToUpdate.brochure = uploadedFiles.brochure.map(doc => ({
-//           url: doc.url,
-//           uploaded_at: currentDate
-//         }));
-//       }
-//     } else {
-//       projectToUpdate.files = uploadedFiles;
-//     }
-
-//     console.log('=== FINAL UPDATE DATA FOR SERVICE ===', projectToUpdate);
-
-//     // Gọi service
-//     const project = await projectService.updateProjectService(id, projectToUpdate);
-    
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       message: 'Update project successfully',
-//       data: project
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// export const remove = async (req, res, next) => {
-//   try {
-//     // Lấy project trước khi xóa
-//     const project = await projectService.getProjectByIdService(req.params.id);
-    
-//     // Xóa project từ database
-//     await projectService.deleteProjectService(req.params.id);
-    
-//     // Xóa files từ Cloudinary nếu đang sử dụng
-//     if (process.env.USE_CLOUDINARY === 'true' && project) {
-//       try {
-//         const urlsToDelete = [];
-        
-//         // Hàm extract URL từ image object
-//         const extractUrl = (imageField) => {
-//           if (Array.isArray(imageField)) {
-//             return imageField.map(item => item.url);
-//           } else if (imageField && imageField.url) {
-//             return [imageField.url];
-//           }
-//           return [];
-//         };
-        
-//         if (project.heroImage) urlsToDelete.push(...extractUrl(project.heroImage));
-//         if (project.gallery) urlsToDelete.push(...extractUrl(project.gallery));
-//         if (project.constructionProgress) urlsToDelete.push(...extractUrl(project.constructionProgress));
-//         if (project.designImages) urlsToDelete.push(...extractUrl(project.designImages));
-//         if (project.brochure) urlsToDelete.push(...extractUrl(project.brochure));
-        
-//         if (urlsToDelete.length > 0) {
-//           await deleteMultipleFromCloudinary(urlsToDelete);
-//           console.log(`🗑️ Deleted ${urlsToDelete.length} files from Cloudinary`);
-//         }
-//       } catch (cloudinaryError) {
-//         console.error('Error deleting files from Cloudinary:', cloudinaryError);
-//       }
-//     }
-    
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       message: 'Delete project successfully'
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
-
-// export const deleteImages = async (req, res, next) => {
-//   try {
-//     const { imageType, imageUrls } = req.body;
-    
-//     if (!imageType || !imageUrls || !Array.isArray(imageUrls)) {
-//       return res.status(StatusCodes.BAD_REQUEST).json({
-//         success: false,
-//         message: 'imageType and imageUrls (array) are required'
-//       });
-//     }
-
-//     // Xóa images từ Cloudinary nếu đang sử dụng
-//     if (process.env.USE_CLOUDINARY === 'true') {
-//       try {
-//         // Extract URLs từ image objects
-//         const urlsToDelete = imageUrls.map(url => 
-//           typeof url === 'object' ? url.url : url
-//         );
-        
-//         await deleteMultipleFromCloudinary(urlsToDelete);
-//         console.log(`🗑️ Deleted ${urlsToDelete.length} ${imageType} images from Cloudinary`);
-//       } catch (cloudinaryError) {
-//         console.error('Error deleting images from Cloudinary:', cloudinaryError);
-//         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-//           success: false,
-//           message: 'Failed to delete images from storage'
-//         });
-//       }
-//     }
-
-//     const project = await projectService.deleteProjectImagesService(
-//       req.params.id, 
-//       imageType, 
-//       imageUrls
-//     );
-    
-//     res.status(StatusCodes.OK).json({
-//       success: true,
-//       message: 'Delete images successfully',
-//       data: project
-//     });
-//   } catch (err) {
-//     next(err);
-//   }
-// };
+// controllers/projectController.js
 import { StatusCodes } from "http-status-codes";
 import projectService from "../services/projectService.js";
 import { deleteMultipleFromB2 } from '../config/b2.js';
+import { Project } from '../models/projectModel.js';
 
+// controllers/projectController.js - Sửa hàm createProject
 export const createProject = async (req, res, next) => {
   try {
     let projectData = {};
@@ -357,55 +12,12 @@ export const createProject = async (req, res, next) => {
       try {
         projectData = JSON.parse(req.body.data);
         
-        // ========== QUAN TRỌNG: LOẠI BỎ BLOB URLs TỪ DỮ LIỆU CLIENT ==========
-        // Hàm helper để filter blob và data URLs
-        const filterBlobUrls = (array) => {
-          if (!array || !Array.isArray(array)) return [];
-          return array.filter(item => {
-            if (!item) return false;
-            
-            // Xác định URL
-            let url;
-            if (typeof item === 'object') {
-              url = item.url || '';
-            } else {
-              url = item || '';
-            }
-            
-            // Chỉ giữ lại URLs không phải blob: hoặc data:
-            return url && !url.startsWith('blob:') && !url.startsWith('data:');
-          });
-        };
-        
-        console.log('=== CREATE PROJECT: FILTERING BLOB URLs ===');
-        console.log('Original gallery count:', projectData.gallery?.length || 0);
-        console.log('Original constructionProgress count:', projectData.constructionProgress?.length || 0);
-        console.log('Original designImages count:', projectData.designImages?.length || 0);
-        console.log('Original brochure count:', projectData.brochure?.length || 0);
-        
-        // Filter tất cả các mảng ảnh
-        projectData.gallery = filterBlobUrls(projectData.gallery);
-        projectData.constructionProgress = filterBlobUrls(projectData.constructionProgress);
-        projectData.designImages = filterBlobUrls(projectData.designImages);
-        projectData.brochure = filterBlobUrls(projectData.brochure);
-        
-        console.log('After filtering blob URLs:');
-        console.log('Gallery count:', projectData.gallery?.length || 0);
-        console.log('ConstructionProgress count:', projectData.constructionProgress?.length || 0);
-        console.log('DesignImages count:', projectData.designImages?.length || 0);
-        console.log('Brochure count:', projectData.brochure?.length || 0);
-        
-        // Filter heroImage
-        if (projectData.heroImage) {
-          const heroUrl = typeof projectData.heroImage === 'object' 
-            ? projectData.heroImage.url 
-            : projectData.heroImage;
-          
-          if (heroUrl && (heroUrl.startsWith('blob:') || heroUrl.startsWith('data:'))) {
-            console.log('Filtering out blob heroImage URL');
-            projectData.heroImage = null;
-          }
-        }
+        console.log('=== CREATE PROJECT: PROCESSING DATA ===');
+        console.log('Gallery from client:', projectData.gallery?.length);
+        console.log('ConstructionProgress from client:', projectData.constructionProgress?.length);
+        console.log('DesignImages from client:', projectData.designImages?.length);
+        console.log('Brochure from client:', projectData.brochure?.length);
+        console.log('HeroImage from client:', projectData.heroImage ? 'Yes' : 'No');
         
       } catch (parseError) {
         console.error('Error parsing JSON data:', parseError);
@@ -416,116 +28,149 @@ export const createProject = async (req, res, next) => {
       }
     }
 
-    // Xử lý files từ B2
-    let uploadedFiles = {};
-    if (req.b2Files && req.b2Files.length > 0) {
-      console.log(`📁 ${req.b2Files.length} files uploaded to B2`);
-      
-      // Nhóm files theo fieldname từ req.b2Files
-      uploadedFiles = {
-        heroImage: req.b2Files.find(file => file.key.includes('heroImage')) || null,
-        gallery: req.b2Files.filter(file => file.key.includes('gallery')) || [],
-        constructionProgress: req.b2Files.filter(file => file.key.includes('constructionProgress')) || [],
-        designImages: req.b2Files.filter(file => file.key.includes('designImages')) || [],
-        brochure: req.b2Files.filter(file => file.key.includes('brochure')) || []
-      };
-      
-      console.log('Uploaded files by type:');
-      console.log('- HeroImage:', uploadedFiles.heroImage ? 'Yes' : 'No');
-      console.log('- Gallery:', uploadedFiles.gallery.length);
-      console.log('- ConstructionProgress:', uploadedFiles.constructionProgress.length);
-      console.log('- DesignImages:', uploadedFiles.designImages.length);
-      console.log('- Brochure:', uploadedFiles.brochure.length);
-    }
-
-    // Tạo project data object để truyền vào service
-    const projectToCreate = {
-      ...projectData
+    // ========== KẾT HỢP ẢNH TỪ 2 NGUỒN ==========
+    // 1. Ảnh đã upload qua real-time (trong projectData)
+    // 2. Ảnh mới upload qua multer (trong req.b2Files)
+    
+    let combinedImages = {
+      heroImage: null,
+      gallery: [],
+      constructionProgress: [],
+      designImages: [],
+      brochure: []
     };
-
-    // Thêm image URLs vào project data (CHỈ từ B2, không kết hợp với client data)
+    
     const currentDate = new Date();
     
-    // QUAN TRỌNG: Chỉ sử dụng files từ B2, không kết hợp với bất kỳ dữ liệu nào từ client
-    // vì client data chỉ chứa blob URLs (đã được filter ở trên) hoặc empty
-    const imagesConfig = {
-      heroImage: uploadedFiles.heroImage ? {
-        url: uploadedFiles.heroImage.url,
-        key: uploadedFiles.heroImage.key,
-        path: uploadedFiles.heroImage.path,
-        uploaded_at: currentDate,
-        name: uploadedFiles.heroImage.originalname,
-        type: uploadedFiles.heroImage.mimetype
-      } : null,
+    // Hàm chuẩn hóa image object
+    const normalizeImage = (imgData) => {
+      if (!imgData) return null;
       
-      gallery: uploadedFiles.gallery ? uploadedFiles.gallery.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
-        uploaded_at: currentDate,
-        name: img.originalname,
-        type: img.mimetype
-      })) : [],
+      if (typeof imgData === 'object') {
+        return {
+          url: imgData.url || imgData,
+          key: imgData.key || extractKeyFromUrl(imgData.url || imgData),
+          path: imgData.path || '',
+          uploaded_at: imgData.uploaded_at || currentDate,
+          name: imgData.name || (imgData.url ? imgData.url.split('/').pop() : ''),
+          type: imgData.type || 'image/*'
+        };
+      }
       
-      constructionProgress: uploadedFiles.constructionProgress ? uploadedFiles.constructionProgress.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
+      // Nếu là string URL
+      return {
+        url: imgData,
+        key: extractKeyFromUrl(imgData),
+        path: '',
         uploaded_at: currentDate,
-        name: img.originalname,
-        type: img.mimetype
-      })) : [],
-      
-      designImages: uploadedFiles.designImages ? uploadedFiles.designImages.map(img => ({
-        url: img.url,
-        key: img.key,
-        path: img.path,
-        uploaded_at: currentDate,
-        name: img.originalname,
-        type: img.mimetype
-      })) : [],
-      
-      brochure: uploadedFiles.brochure ? uploadedFiles.brochure.map(doc => ({
-        url: doc.url,
-        key: doc.key,
-        path: doc.path,
-        uploaded_at: currentDate,
-        name: doc.originalname,
-        type: doc.mimetype
-      })) : []
+        name: imgData.split('/').pop() || '',
+        type: imgData.includes('.pdf') ? 'application/pdf' : 'image/*'
+      };
     };
-
-    // Ghi đè các fields ảnh trong projectToCreate với chỉ URLs từ B2
-    projectToCreate.heroImage = imagesConfig.heroImage;
-    projectToCreate.gallery = imagesConfig.gallery;
-    projectToCreate.constructionProgress = imagesConfig.constructionProgress;
-    projectToCreate.designImages = imagesConfig.designImages;
-    projectToCreate.brochure = imagesConfig.brochure;
     
-    // DEBUG: Kiểm tra dữ liệu cuối cùng
-    console.log('=== FINAL PROJECT DATA FOR CREATE ===');
-    console.log('Basic info:', {
-      title: projectToCreate.title,
-      descriptionLength: projectToCreate.description?.length,
-      location: projectToCreate.location
-    });
-    console.log('Images summary:');
-    console.log('- HeroImage:', projectToCreate.heroImage ? 'Has image' : 'No image');
-    console.log('- Gallery count:', projectToCreate.gallery?.length || 0);
-    console.log('- ConstructionProgress count:', projectToCreate.constructionProgress?.length || 0);
-    console.log('- DesignImages count:', projectToCreate.designImages?.length || 0);
-    console.log('- Brochure count:', projectToCreate.brochure?.length || 0);
+    // Xử lý ảnh từ projectData (đã upload qua real-time)
+    if (projectData.heroImage) {
+      combinedImages.heroImage = normalizeImage(projectData.heroImage);
+    }
     
-    // Kiểm tra nếu không có ảnh nào (bao gồm cả heroImage)
-    if (!projectToCreate.heroImage && 
-        projectToCreate.gallery.length === 0 &&
-        projectToCreate.constructionProgress.length === 0 &&
-        projectToCreate.designImages.length === 0 &&
-        projectToCreate.brochure.length === 0) {
+    if (projectData.gallery && Array.isArray(projectData.gallery)) {
+      combinedImages.gallery = projectData.gallery
+        .map(normalizeImage)
+        .filter(img => img && img.url);
+    }
+    
+    if (projectData.constructionProgress && Array.isArray(projectData.constructionProgress)) {
+      combinedImages.constructionProgress = projectData.constructionProgress
+        .map(normalizeImage)
+        .filter(img => img && img.url);
+    }
+    
+    if (projectData.designImages && Array.isArray(projectData.designImages)) {
+      combinedImages.designImages = projectData.designImages
+        .map(normalizeImage)
+        .filter(img => img && img.url);
+    }
+    
+    if (projectData.brochure && Array.isArray(projectData.brochure)) {
+      combinedImages.brochure = projectData.brochure
+        .map(normalizeImage)
+        .filter(img => img && img.url);
+    }
+    
+    // Xử lý ảnh từ req.b2Files (upload mới qua multer)
+    if (req.b2Files && req.b2Files.length > 0) {
+      console.log(`📁 ${req.b2Files.length} files uploaded via multer`);
+      
+      req.b2Files.forEach(b2File => {
+        const imageData = {
+          url: b2File.url,
+          key: b2File.key,
+          path: b2File.path,
+          uploaded_at: currentDate,
+          name: b2File.originalname,
+          type: b2File.mimetype
+        };
+        
+        // Xác định loại ảnh dựa trên key hoặc fieldname
+        if (b2File.key.includes('heroImage') || b2File.fieldname === 'heroImage') {
+          combinedImages.heroImage = imageData;
+        } 
+        else if (b2File.key.includes('gallery') || b2File.fieldname === 'gallery') {
+          combinedImages.gallery.push(imageData);
+        }
+        else if (b2File.key.includes('constructionProgress') || b2File.fieldname === 'constructionProgress') {
+          combinedImages.constructionProgress.push(imageData);
+        }
+        else if (b2File.key.includes('designImages') || b2File.fieldname === 'designImages') {
+          combinedImages.designImages.push(imageData);
+        }
+        else if (b2File.key.includes('brochure') || b2File.fieldname === 'brochure') {
+          combinedImages.brochure.push(imageData);
+        }
+      });
+    }
+    
+    console.log('=== COMBINED IMAGES SUMMARY ===');
+    console.log('- HeroImage:', combinedImages.heroImage ? 'Yes' : 'No');
+    console.log('- Gallery:', combinedImages.gallery.length);
+    console.log('- ConstructionProgress:', combinedImages.constructionProgress.length);
+    console.log('- DesignImages:', combinedImages.designImages.length);
+    console.log('- Brochure:', combinedImages.brochure.length);
+    
+    // Tạo project với ảnh đã được kết hợp
+    const projectToCreate = {
+      title: projectData.title || '',
+      description: projectData.description || '',
+      status: projectData.status || 'draft',
+      location: projectData.location || '',
+      propertyFeatures: projectData.propertyFeatures || [],
+      specifications: projectData.specifications || [],
+      propertyHighlights: projectData.propertyHighlights || [],
+      specialSections: projectData.specialSections || [],
+      
+      // Sử dụng ảnh đã kết hợp
+      heroImage: combinedImages.heroImage,
+      gallery: combinedImages.gallery,
+      constructionProgress: combinedImages.constructionProgress,
+      designImages: combinedImages.designImages,
+      brochure: combinedImages.brochure,
+      
+      createdAt: currentDate,
+      updatedAt: currentDate
+    };
+    
+    // Kiểm tra xem có ảnh nào không
+    const hasAnyImages = 
+      combinedImages.heroImage || 
+      combinedImages.gallery.length > 0 || 
+      combinedImages.constructionProgress.length > 0 || 
+      combinedImages.designImages.length > 0 || 
+      combinedImages.brochure.length > 0;
+    
+    if (!hasAnyImages) {
       console.log('⚠️ Warning: Project created with no images');
     }
 
-    // Gọi service
     const project = await projectService.createProjectService(projectToCreate);
     
     res.status(StatusCodes.CREATED).json({
@@ -592,13 +237,11 @@ export const update = async (req, res, next) => {
         updateData = JSON.parse(req.body.data);
         console.log('✅ Successfully parsed update data');
         
-        // Debug tất cả các loại ảnh
         console.log('Gallery count from client:', updateData.gallery?.length);
         console.log('ConstructionProgress count:', updateData.constructionProgress?.length);
         console.log('DesignImages count:', updateData.designImages?.length);
         console.log('Brochure count:', updateData.brochure?.length);
         
-        // ========== XỬ LÝ XÓA ẢNH TỪ B2 CHO TẤT CẢ LOẠI ==========
         if (updateData.deletedImages) {
           console.log('=== PROCESSING DELETED IMAGES ===');
           
@@ -611,7 +254,6 @@ export const update = async (req, res, next) => {
             'heroImage'
           ];
           
-          // Process all image types
           imageTypes.forEach(type => {
             const urls = updateData.deletedImages[type];
             if (!urls) return;
@@ -627,7 +269,6 @@ export const update = async (req, res, next) => {
                 }
               });
             } else if (urls) {
-              // For heroImage (single item, not array)
               const key = extractKeyFromUrl(urls);
               if (key) {
                 itemsToDelete.push({ url: urls, key, type });
@@ -636,7 +277,6 @@ export const update = async (req, res, next) => {
             }
           });
           
-          // Thực hiện xóa từ B2
           if (itemsToDelete.length > 0) {
             const keysToDelete = itemsToDelete.map(item => item.key).filter(key => key);
             
@@ -647,12 +287,10 @@ export const update = async (req, res, next) => {
                 console.log('Deleted types:', [...new Set(itemsToDelete.map(item => item.type))]);
               } catch (b2Error) {
                 console.error('❌ Error deleting from B2:', b2Error.message);
-                // Continue even if B2 delete fails
               }
             }
           }
           
-          // Xóa field deletedImages khỏi updateData
           delete updateData.deletedImages;
         }
         
@@ -665,7 +303,6 @@ export const update = async (req, res, next) => {
       }
     }
 
-    // ========== XỬ LÝ FILES MỚI TỪ B2 ==========
     let uploadedFiles = {};
     if (req.b2Files && req.b2Files.length > 0) {
       console.log(`📁 ${req.b2Files.length} new files uploaded to B2`);
@@ -688,10 +325,8 @@ export const update = async (req, res, next) => {
       updateData._hasNewFiles = true;
     }
 
-    // ========== QUAN TRỌNG: MERGE ẢNH HIỆN TẠI VỚI ẢNH MỚI CHO TẤT CẢ LOẠI ==========
     const currentDate = new Date();
     
-    // Hàm helper để filter và merge images
     const processImageArray = (clientArray, uploadedArray, typeName) => {
       if (!clientArray || !Array.isArray(clientArray)) {
         return uploadedArray || [];
@@ -699,7 +334,6 @@ export const update = async (req, res, next) => {
       
       console.log(`Processing ${typeName}...`);
       
-      // Filter out blob URLs (only keep B2 URLs)
       const existingItems = clientArray.filter(item => {
         if (!item) return false;
         
@@ -719,7 +353,6 @@ export const update = async (req, res, next) => {
       
       console.log(`  Existing ${typeName} after filtering: ${existingItems.length} items`);
       
-      // Add new uploaded files
       if (uploadedArray && uploadedArray.length > 0) {
         console.log(`  Adding ${uploadedArray.length} new items to ${typeName}`);
         
@@ -739,7 +372,6 @@ export const update = async (req, res, next) => {
       return existingItems;
     };
     
-    // Process ALL image types
     updateData.gallery = processImageArray(updateData.gallery, uploadedFiles.gallery, 'gallery');
     updateData.constructionProgress = processImageArray(
       updateData.constructionProgress, 
@@ -757,7 +389,6 @@ export const update = async (req, res, next) => {
       'brochure'
     );
     
-    // Xử lý heroImage
     if (uploadedFiles.heroImage) {
       updateData.heroImage = {
         url: uploadedFiles.heroImage.url,
@@ -766,12 +397,10 @@ export const update = async (req, res, next) => {
         uploaded_at: currentDate
       };
     } else if (updateData.heroImage) {
-      // Giữ heroImage hiện tại nếu không upload mới
       const heroUrl = typeof updateData.heroImage === 'object' 
         ? updateData.heroImage.url 
         : updateData.heroImage;
       
-      // Chỉ giữ lại nếu không phải blob URL
       if (heroUrl && !heroUrl.startsWith('blob:') && !heroUrl.startsWith('data:')) {
         if (typeof updateData.heroImage === 'string') {
           updateData.heroImage = { url: updateData.heroImage };
@@ -788,7 +417,6 @@ export const update = async (req, res, next) => {
     console.log('Brochure:', updateData.brochure?.length || 0);
     console.log('HeroImage:', updateData.heroImage ? 'Yes' : 'No');
     
-    // Gọi service
     const project = await projectService.updateProjectService(id, updateData);
     
     res.status(StatusCodes.OK).json({
@@ -801,7 +429,241 @@ export const update = async (req, res, next) => {
   }
 };
 
-// Helper function cải tiến để extract key từ URL
+export const uploadProjectImage = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { imageType = 'gallery', folder = 'projects' } = req.body;
+    
+    if (!req.file) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'No image file provided'
+      });
+    }
+
+    const b2File = req.b2Files?.[0];
+    
+    if (!b2File) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Image upload failed'
+      });
+    }
+
+    const imageData = {
+      url: b2File.url,
+      key: b2File.key,
+      path: b2File.path,
+      name: b2File.originalname,
+      type: b2File.mimetype,
+      size: b2File.size,
+      uploaded_at: new Date()
+    };
+
+    if (id && id !== 'new') {
+      const project = await Project.findById(id);
+      if (!project) {
+        return res.status(StatusCodes.NOT_FOUND).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+
+      switch (imageType) {
+        case 'hero':
+          project.heroImage = imageData;
+          break;
+        case 'gallery':
+          project.gallery.push(imageData);
+          break;
+        case 'constructionProgress':
+          project.constructionProgress.push(imageData);
+          break;
+        case 'designImages':
+          project.designImages.push(imageData);
+          break;
+        case 'brochure':
+          project.brochure.push(imageData);
+          break;
+        default:
+          project.gallery.push(imageData);
+      }
+
+      project.updatedAt = new Date();
+      await project.save();
+    }
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: {
+        image: imageData,
+        projectId: id,
+        imageType: imageType
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const uploadMultipleProjectImages = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { imageType = 'gallery', folder = 'projects' } = req.body;
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'No image files provided'
+      });
+    }
+
+    const b2Files = req.b2Files || [];
+    
+    if (b2Files.length === 0) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Image upload failed'
+      });
+    }
+
+    const imagesData = b2Files.map(b2File => ({
+      url: b2File.url,
+      key: b2File.key,
+      path: b2File.path,
+      name: b2File.originalname,
+      type: b2File.mimetype,
+      size: b2File.size,
+      uploaded_at: new Date()
+    }));
+
+    if (id && id !== 'new') {
+      const project = await Project.findById(id);
+      if (!project) {
+        return res.status(StatusCodes.NOT_FOUND).json({
+          success: false,
+          message: 'Project not found'
+        });
+      }
+      console.log(imageType, project)
+      switch (imageType) {
+        case 'gallery':
+          project.gallery.push(...imagesData);
+          break;
+        case 'constructionProgress':
+          project.constructionProgress.push(...imagesData);
+          break;
+        case 'designImages':
+          project.designImages.push(...imagesData);
+          break;
+        case 'brochure':
+          project.brochure.push(...imagesData);
+          break;
+        default:
+          project.gallery.push(...imagesData);
+      }
+
+      project.updatedAt = new Date();
+      await project.save();
+    }
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: `${imagesData.length} images uploaded successfully`,
+      data: {
+        images: imagesData,
+        projectId: id,
+        imageType: imageType,
+        count: imagesData.length
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteProjectImage = async (req, res, next) => {
+  try {
+    const { id, imageKey } = req.params;
+    const { imageType } = req.query;
+    
+    if (!imageKey) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: 'imageKey is required'
+      });
+    }
+
+    try {
+      await deleteMultipleFromB2([imageKey]);
+      console.log(`🗑️ Deleted image from B2: ${imageKey}`);
+    } catch (b2Error) {
+      console.error('Error deleting from B2:', b2Error);
+    }
+
+    if (id && id !== 'new') {
+      const project = await Project.findById(id);
+      if (project) {
+        let updated = false;
+        
+        if (imageType) {
+          switch (imageType) {
+            case 'hero':
+              if (project.heroImage && project.heroImage.key === imageKey) {
+                project.heroImage = null;
+                updated = true;
+              }
+              break;
+            case 'gallery':
+              project.gallery = project.gallery.filter(img => img.key !== imageKey);
+              updated = true;
+              break;
+            case 'constructionProgress':
+              project.constructionProgress = project.constructionProgress.filter(img => img.key !== imageKey);
+              updated = true;
+              break;
+            case 'designImages':
+              project.designImages = project.designImages.filter(img => img.key !== imageKey);
+              updated = true;
+              break;
+            case 'brochure':
+              project.brochure = project.brochure.filter(doc => doc.key !== imageKey);
+              updated = true;
+              break;
+          }
+        } else {
+          if (project.heroImage && project.heroImage.key === imageKey) {
+            project.heroImage = null;
+          }
+          project.gallery = project.gallery.filter(img => img.key !== imageKey);
+          project.constructionProgress = project.constructionProgress.filter(img => img.key !== imageKey);
+          project.designImages = project.designImages.filter(img => img.key !== imageKey);
+          project.brochure = project.brochure.filter(doc => doc.key !== imageKey);
+          updated = true;
+        }
+        
+        if (updated) {
+          project.updatedAt = new Date();
+          await project.save();
+        }
+      }
+    }
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: 'Image deleted successfully',
+      data: {
+        deletedKey: imageKey,
+        projectId: id
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Thêm hàm này nếu chưa có trong file controller
 function extractKeyFromUrl(url) {
   if (!url) return null;
   
@@ -809,54 +671,31 @@ function extractKeyFromUrl(url) {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
     
-    // Pattern: /file/bucket-name/folder/file-name
     const parts = pathname.split('/');
     
-    // Lấy phần từ "file" trở đi
     const fileIndex = parts.findIndex(part => part === 'file');
     if (fileIndex !== -1 && fileIndex + 2 < parts.length) {
-      // Trả về path từ folder trở đi
       return parts.slice(fileIndex + 2).join('/');
     }
     
-    // Fallback: lấy phần cuối cùng
     return parts[parts.length - 1];
     
   } catch (e) {
-    console.error('Error extracting key from URL:', url.substring(0, 100));
+    console.error('Error extracting key from URL:', url);
     return null;
   }
 }
 
-// Helper function để extract key từ URL
-// function extractKeyFromUrl(url) {
-//   if (!url) return null;
-//   try {
-//     // URL pattern: https://.../projects/[key]
-//     const urlObj = new URL(url);
-//     const pathParts = urlObj.pathname.split('/');
-//     // Lấy phần cuối cùng của path
-//     return pathParts[pathParts.length - 1];
-//   } catch (e) {
-//     console.error('Error extracting key from URL:', e);
-//     return null;
-//   }
-// }
-
 export const remove = async (req, res, next) => {
   try {
-    // Lấy project trước khi xóa
     const project = await projectService.getProjectByIdService(req.params.id);
     
-    // Xóa project từ database
     await projectService.deleteProjectService(req.params.id);
     
-    // Xóa files từ B2
     if (project) {
       try {
         const itemsToDelete = [];
         
-        // Hàm extract thông tin từ image object
         const extractItems = (imageField) => {
           if (Array.isArray(imageField)) {
             return imageField.map(item => ({
@@ -912,7 +751,6 @@ export const deleteImages = async (req, res, next) => {
       });
     }
 
-    // Xóa images từ B2
     try {
       const itemsToDelete = imageUrls.map(item => 
         typeof item === 'object' ? item : { url: item }

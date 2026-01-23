@@ -593,7 +593,22 @@ const handleMulterError = (error, req, res, next) => {
   console.error('❌ Upload error:', error);
   next(error);
 };
-
+const uploadB2File = multer({
+  storage: b2Storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  }
+});
+const uploadProjectImagesArray = multer({
+  storage: b2Storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 20
+  }
+}).array('images', 20);
 // ==================== EXPORTS ====================
 export {
   // Multer instances
@@ -613,5 +628,7 @@ export {
   // B2 Utilities
   deleteFileFromB2,
   deleteMultipleFromB2,
-  b2UploadService
+  b2UploadService,
+  uploadB2File,
+  uploadProjectImagesArray,
 };
