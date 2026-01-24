@@ -23,7 +23,10 @@ const specialSectionSchema = new mongoose.Schema({
 // Schema cho image với uploaded_at
 const imageSchema = new mongoose.Schema({
   url: { type: String, required: true },
-  uploaded_at: { type: Date, default: Date.now }
+  key: String,
+  uploaded_at: { type: Date, default: Date.now },
+  name: String,
+  type: { type: String, default: 'image/*' }
 }, { _id: true });
 
 const projectSchema = new mongoose.Schema({
@@ -36,13 +39,13 @@ const projectSchema = new mongoose.Schema({
   },
   location: String,
   
-  // Images - ĐÃ LOẠI BỎ floorPlans, THÊM uploaded_at
+  // Images từ FolderManager
   heroImage: {
     type: imageSchema,
     default: null
   },
   gallery: [imageSchema],
-  constructionProgress: [imageSchema], // 👈 ĐÃ THÊM uploaded_at
+  constructionProgress: [imageSchema],
   designImages: [imageSchema],
   brochure: [imageSchema],
 

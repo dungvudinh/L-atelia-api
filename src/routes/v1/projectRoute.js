@@ -1,3 +1,4 @@
+// routes/projectRoutes.js
 import express from "express";
 import { 
     getProjects,
@@ -5,24 +6,18 @@ import {
     getProjectBySlug,
     update,
     remove,
-    deleteImages,
-    createProject,
-    confirmTempImages, // ✅ THÊM
-    createProjectWithConfirm // ✅ THÊM
+    createProject
 } from "../../controllers/projectController.js";
-import { uploadProjectFields, handleMulterError } from '../../config/b2.js';
 
 const Router = express.Router({mergeParams:true});
 
 Router.get('/', getProjects);
 Router.get('/slug/:slug', getProjectBySlug);
 Router.get('/:id', getProjectById);
-Router.post('/confirm', createProjectWithConfirm);
-Router.post('/:id/confirm-images', confirmTempImages); // ✅ THÊM ROUTE CONFIRM IMAGES 
-// Protected routes
-Router.post('/', uploadProjectFields, handleMulterError, createProject);
-Router.put('/:id', uploadProjectFields, handleMulterError, update);
+
+// Routes chỉ nhận JSON, không xử lý file upload
+Router.post('/', createProject);
+Router.put('/:id', update);
 Router.delete('/:id', remove);
-Router.post('/:id/images/delete', deleteImages);
 
 export default Router;
