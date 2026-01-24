@@ -9,6 +9,7 @@ import userRoute from './userRoute.js'
 import rolePermissionRoute from './rolePermissionRoute.js'
 import bookingNotificationRoute from './bookingNotificationRoute.js'
 import contactRoute from './contactRoute.js'
+import imageRoute from './imageRoute.js';
 // const express = require('express');
 // const projectRoute = require('./projectRoute.js');
 const Router = express.Router();
@@ -22,4 +23,5 @@ Router.use('/users', userRoute)
 Router.use('/role-permissions', rolePermissionRoute)
 Router.use('/notifications', bookingNotificationRoute)
 Router.use('/contact', contactRoute)
+Router.use('/images', imageRoute)
 export default Router;

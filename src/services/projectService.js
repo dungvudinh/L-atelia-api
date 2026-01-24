@@ -1,6 +1,6 @@
 import { Project } from '../models/projectModel.js';
 import { deleteMultipleFromB2 } from '../config/b2.js';
-
+import { PendingImage } from '../models/pendingImageModel.js';
 export const createProjectService = async (projectData) => {
   try {
     const {
@@ -352,6 +352,97 @@ const deleteProjectImagesService = async (id, imageType, imageUrls) => {
     throw error;
   }
 };
+const confirmProjectImagesService = async (projectId, imagesToConfirm) => {
+  try {
+    const existingProject = await Project.findById(projectId);
+    if (!existingProject) {
+      throw new Error('Project not found');
+    }
+
+    const updateFields = {
+      updatedAt: new Date()
+    };
+
+    // Cập nhật heroImage
+    if (imagesToConfirm.heroImage) {
+      updateFields.heroImage = imagesToConfirm.heroImage;
+    }
+
+    // Cập nhật gallery (thêm vào, không ghi đè)
+    if (imagesToConfirm.gallery && imagesToConfirm.gallery.length > 0) {
+      updateFields.gallery = [
+        ...(existingProject.gallery || []),
+        ...imagesToConfirm.gallery
+      ];
+    }
+
+    // Cập nhật constructionProgress
+    if (imagesToConfirm.constructionProgress && imagesToConfirm.constructionProgress.length > 0) {
+      updateFields.constructionProgress = [
+        ...(existingProject.constructionProgress || []),
+        ...imagesToConfirm.constructionProgress
+      ];
+    }
+
+    // Cập nhật designImages
+    if (imagesToConfirm.designImages && imagesToConfirm.designImages.length > 0) {
+      updateFields.designImages = [
+        ...(existingProject.designImages || []),
+        ...imagesToConfirm.designImages
+      ];
+    }
+
+    // Cập nhật brochure
+    if (imagesToConfirm.brochure && imagesToConfirm.brochure.length > 0) {
+      updateFields.brochure = [
+        ...(existingProject.brochure || []),
+        ...imagesToConfirm.brochure
+      ];
+    }
+
+    const updatedProject = await Project.findByIdAndUpdate(
+      projectId,
+      updateFields,
+      { new: true, runValidators: true }
+    );
+
+    return updatedProject;
+  } catch (error) {
+    console.error('Error in confirmProjectImagesService:', error);
+    throw error;
+  }
+};
+const createProjectWithConfirmService = async (projectData, imagesToConfirm) => {
+  try {
+    // Tạo project trước
+    const project = await Project.create(projectData);
+    
+    // Nếu có images để confirm, gọi hàm confirm
+    if (imagesToConfirm && (
+      imagesToConfirm.heroImage || 
+      imagesToConfirm.gallery?.length > 0 ||
+      imagesToConfirm.constructionProgress?.length > 0 ||
+      imagesToConfirm.designImages?.length > 0 ||
+      imagesToConfirm.brochure?.length > 0
+    )) {
+      await confirmProjectImagesService(project._id, imagesToConfirm);
+    }
+    
+    // Lấy lại project đã được cập nhật
+    const updatedProject = await Project.findById(project._id);
+    return updatedProject;
+  } catch (error) {
+    // Nếu lỗi, xóa project vừa tạo và cleanup pending images
+    if (error.projectId) {
+      try {
+        await Project.findByIdAndDelete(error.projectId);
+      } catch (deleteError) {
+        console.error('Error deleting failed project:', deleteError);
+      }
+    }
+    throw error;
+  }
+};
 
 const projectService = {
   createProjectService, 
@@ -360,7 +451,9 @@ const projectService = {
   getProjectBySlugService,
   updateProjectService,
   deleteProjectService,
-  deleteProjectImagesService
+  deleteProjectImagesService,
+  confirmProjectImagesService,
+  createProjectWithConfirmService
 }
 
 export default projectService;

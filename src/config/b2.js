@@ -5,6 +5,9 @@ import AWS from 'aws-sdk';
 import sharp from 'sharp';
 
 // ==================== BACKBLAZE B2 CONFIGURATION ====================
+// B2 TEST
+// KEYID:005cff6c7916163000000000f
+// ACCESSKEY:K0053MNAAbEQAmSy7V0SRWvntGwEITw
 const s3 = new AWS.S3({
   endpoint: 'https://s3.us-east-005.backblazeb2.com',
   accessKeyId: '0055260a374b5ff0000000007',
@@ -496,7 +499,25 @@ const uploadMedia = multer({
 });
 
 const uploadMediaSingle = uploadMedia.single('featuredImage');
-
+const uploadSingleImage = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'image/jpeg', 'image/jpg', 'image/png', 
+      'image/gif', 'image/webp', 'application/pdf'
+    ];
+    
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type not allowed: ${file.mimetype}`), false);
+    }
+  }
+}).single('file');
 // Project upload configurations
 const uploadProjectFields = uploadProject.fields([
   { name: 'heroImage', maxCount: 1 },
@@ -613,5 +634,6 @@ export {
   // B2 Utilities
   deleteFileFromB2,
   deleteMultipleFromB2,
-  b2UploadService
+  b2UploadService,
+  uploadSingleImage,
 };

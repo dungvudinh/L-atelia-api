@@ -6,7 +6,9 @@ import {
     update,
     remove,
     deleteImages,
-    createProject 
+    createProject,
+    confirmTempImages, // ✅ THÊM
+    createProjectWithConfirm // ✅ THÊM
 } from "../../controllers/projectController.js";
 import { uploadProjectFields, handleMulterError } from '../../config/b2.js';
 
@@ -15,7 +17,8 @@ const Router = express.Router({mergeParams:true});
 Router.get('/', getProjects);
 Router.get('/slug/:slug', getProjectBySlug);
 Router.get('/:id', getProjectById);
-
+Router.post('/confirm', createProjectWithConfirm);
+Router.post('/:id/confirm-images', confirmTempImages); // ✅ THÊM ROUTE CONFIRM IMAGES 
 // Protected routes
 Router.post('/', uploadProjectFields, handleMulterError, createProject);
 Router.put('/:id', uploadProjectFields, handleMulterError, update);

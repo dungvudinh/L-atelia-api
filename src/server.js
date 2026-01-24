@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
 import initializeDatabase from './scripts/initialDatabase.js';
+import { cleanupPendingImagesCron } from './controllers/imageController.js'; // Thêm import
 
 const allowOrigins = [
   'http://localhost:5173',
@@ -200,6 +201,44 @@ app.use((req, res) => {
   });
 });
 
+// ==================== CRON JOB SETUP ====================
+const setupCronJobs = () => {
+  console.log('⏰ Setting up cron jobs...');
+  
+  // Cleanup pending images every 6 hours
+  const CLEANUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 giờ
+  
+  // Chạy ngay khi server start
+  setTimeout(async () => {
+    try {
+      console.log('🧹 Running initial pending images cleanup...');
+      await cleanupPendingImagesCron();
+      console.log('✅ Initial cleanup completed');
+    } catch (error) {
+      console.error('❌ Initial cleanup failed:', error);
+    }
+  }, 10000); // Chờ 10 giây sau khi server start
+  
+  // Thiết lập interval cleanup
+  const cleanupInterval = setInterval(async () => {
+    try {
+      console.log('🧹 Running scheduled pending images cleanup...');
+      await cleanupPendingImagesCron();
+      console.log('✅ Scheduled cleanup completed');
+    } catch (error) {
+      console.error('❌ Scheduled cleanup failed:', error);
+    }
+  }, CLEANUP_INTERVAL);
+  
+  console.log(`✅ Cron jobs setup complete. Cleanup interval: ${CLEANUP_INTERVAL/1000/60/60} hours`);
+  
+  // Cleanup interval khi server shutdown
+  AsyncExitHook(() => {
+    console.log('Clearing cron job intervals...');
+    clearInterval(cleanupInterval);
+  });
+};
+
 const START_SERVER = () => {
   const server = app.listen(env.APP_PORT || 10000, '0.0.0.0', () => {
     console.log(`
@@ -209,7 +248,11 @@ const START_SERVER = () => {
 ${allowOrigins.map(o => `   - ${o}`).join('\n')}
 📊 Health Check: https://l-atelia-api-yct5.onrender.com/health
 🔍 CORS Test: https://l-atelia-api-yct5.onrender.com/cors-test
+⏰ Cron Jobs: Active (cleanup every 6 hours)
     `);
+    
+    // Khởi động cron jobs sau khi server đã start
+    setupCronJobs();
   });
 
   server.timeout = 300000;
