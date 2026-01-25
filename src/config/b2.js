@@ -9,10 +9,10 @@ import sharp from 'sharp';
 // KEYID:005cff6c7916163000000000f
 // ACCESSKEY:K0053MNAAbEQAmSy7V0SRWvntGwEITw
 const s3 = new AWS.S3({
-  endpoint: 'https://s3.us-east-005.backblazeb2.com',
+  endpoint: 'https://s3.us-west-001.backblazeb2.com',
   accessKeyId: '0055260a374b5ff0000000007',
   secretAccessKey: 'K005ACRMiQA1WzODoU0qlHBUslezqCA',
-  region: 'us-east-005',
+  region: 'us-west-001',
   s3ForcePathStyle: true,
   maxRetries: 2
 });
