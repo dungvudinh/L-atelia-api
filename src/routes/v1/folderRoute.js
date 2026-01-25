@@ -34,8 +34,7 @@ import {
   removeFolder,
   uploadImages,
   deleteImage,
-  bulkDeleteImages,
-  uploadImagesViaForm  // 👈 IMPORT HÀM MỚI
+  bulkDeleteImages
 } from "../../controllers/folderController.js";
 import { uploadFolderArray, handleMulterError } from '../../config/b2.js';
 
@@ -51,7 +50,6 @@ Router.delete('/:id', removeFolder);
 
 // Image management routes
 Router.post('/:id/upload', uploadFolderArray, handleMulterError, uploadImages);
-Router.post('/:id/upload-form', uploadFolderArray, handleMulterError, uploadImagesViaForm); 
 Router.delete('/:folderId/images/:imageId', deleteImage);
 Router.post('/:id/images/bulk-delete', bulkDeleteImages);
 
