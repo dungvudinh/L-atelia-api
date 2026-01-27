@@ -1,32 +1,10 @@
 // models/Project.js
 import mongoose from 'mongoose';
 
-const featureSectionSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  description: String
-}, { _id: true });
-
-const propertyHighlightSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: String,
-  featureSections: [featureSectionSchema]
-}, { _id: true });
-
-const specialSectionSchema = new mongoose.Schema({
-  type: String,
-  title: { type: String, required: true },
-  shortDescription: String,
-  fullDescription: String,
-  isExpandable: { type: Boolean, default: true }
-}, { _id: true });
-
-// Schema cho image với uploaded_at
+// Schema đơn giản hóa
 const imageSchema = new mongoose.Schema({
   url: { type: String, required: true },
-  key: String,
-  uploaded_at: { type: Date, default: Date.now },
-  name: String,
-  type: { type: String, default: 'image/*' }
+  uploaded_at: { type: Date, default: Date.now }
 }, { _id: true });
 
 const projectSchema = new mongoose.Schema({
@@ -39,11 +17,8 @@ const projectSchema = new mongoose.Schema({
   },
   location: String,
   
-  // Images từ FolderManager
-  heroImage: {
-    type: imageSchema,
-    default: null
-  },
+  // Images - CHỈ LƯU URL
+  heroImage: imageSchema,
   gallery: [imageSchema],
   constructionProgress: [imageSchema],
   designImages: [imageSchema],
@@ -58,24 +33,12 @@ const projectSchema = new mongoose.Schema({
     text: String
   }],
 
-  // Highlights and Sections
-  propertyHighlights: [propertyHighlightSchema],
-  specialSections: [specialSectionSchema],
-
   // Timestamps
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Auto-generate slug before save
 projectSchema.pre('save', function(next) {
-  if (this.isModified('title')) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/[^a-z0-9 -]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
-  }
   this.updatedAt = Date.now();
   next();
 });

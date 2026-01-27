@@ -34,7 +34,8 @@ import {
   removeFolder,
   uploadImages,
   deleteImage,
-  bulkDeleteImages
+  bulkDeleteImages,
+  uploadImageToFolder // NEW
 } from "../../controllers/folderController.js";
 import { uploadFolderArray, handleMulterError } from '../../config/b2.js';
 
@@ -52,5 +53,5 @@ Router.delete('/:id', removeFolder);
 Router.post('/:id/upload', uploadFolderArray, handleMulterError, uploadImages);
 Router.delete('/:folderId/images/:imageId', deleteImage);
 Router.post('/:id/images/bulk-delete', bulkDeleteImages);
-
+Router.post('/:id/images', uploadImageToFolder); // NEW: For saving image info after direct upload
 export default Router;

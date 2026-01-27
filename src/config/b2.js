@@ -5,9 +5,8 @@ import AWS from 'aws-sdk';
 import sharp from 'sharp';
 
 // ==================== BACKBLAZE B2 CONFIGURATION ====================
-// B2 TEST
-// KEYID:005cff6c7916163000000000f
-// ACCESSKEY:K0053MNAAbEQAmSy7V0SRWvntGwEITw
+// accessKeyId: 005cff6c79161630000000010
+//accessKey: K005Kliivhq+NjECqaZjiR13HOvuZCs
 const s3 = new AWS.S3({
   endpoint: 'https://s3.us-east-005.backblazeb2.com',
   accessKeyId: '0055260a374b5ff0000000007',
@@ -17,8 +16,8 @@ const s3 = new AWS.S3({
   maxRetries: 2
 });
 
-const B2_BUCKET_NAME = process.env.B2_BUCKET_NAME || 'latelia';
-
+const B2_BUCKET_NAME =  'latelia';
+const memoryStorage = multer.memoryStorage();
 // ==================== B2 UPLOAD SERVICE (FIXED) ====================
 class B2UploadService {
   constructor() {
@@ -499,25 +498,7 @@ const uploadMedia = multer({
 });
 
 const uploadMediaSingle = uploadMedia.single('featuredImage');
-const uploadSingleImage = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 10 * 1024 * 1024,
-    files: 1
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedMimes = [
-      'image/jpeg', 'image/jpg', 'image/png', 
-      'image/gif', 'image/webp', 'application/pdf'
-    ];
-    
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`File type not allowed: ${file.mimetype}`), false);
-    }
-  }
-}).single('file');
+
 // Project upload configurations
 const uploadProjectFields = uploadProject.fields([
   { name: 'heroImage', maxCount: 1 },
@@ -614,7 +595,62 @@ const handleMulterError = (error, req, res, next) => {
   console.error('❌ Upload error:', error);
   next(error);
 };
-
+const uploadB2File = multer({
+  storage: b2Storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1
+  }
+});
+const uploadProjectImagesArray = multer({
+  storage: b2Storage,
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 20
+  }
+}).array('images', 20);
+export const uploadSingleImage = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 
+      'image/gif', 'image/webp', 'image/svg+xml',
+      'application/pdf'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed types: ${allowedTypes.join(', ')}`), false);
+    }
+  }
+}).single('file');
+export const uploadMultipleImages = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 20 // Max 20 files
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 
+      'image/gif', 'image/webp', 'image/svg+xml',
+      'application/pdf'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}`), false);
+    }
+  }
+}).array('files', 20);
 // ==================== EXPORTS ====================
 export {
   // Multer instances
@@ -635,5 +671,6 @@ export {
   deleteFileFromB2,
   deleteMultipleFromB2,
   b2UploadService,
-  uploadSingleImage,
+  uploadB2File,
+  uploadProjectImagesArray,
 };
