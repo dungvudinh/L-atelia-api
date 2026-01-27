@@ -5,6 +5,8 @@ import AWS from 'aws-sdk';
 import sharp from 'sharp';
 
 // ==================== BACKBLAZE B2 CONFIGURATION ====================
+// accessKeyId: 005cff6c79161630000000010
+//accessKey: K005Kliivhq+NjECqaZjiR13HOvuZCs
 const s3 = new AWS.S3({
   endpoint: 'https://s3.us-east-005.backblazeb2.com',
   accessKeyId: '0055260a374b5ff0000000007',
@@ -14,8 +16,8 @@ const s3 = new AWS.S3({
   maxRetries: 2
 });
 
-const B2_BUCKET_NAME = process.env.B2_BUCKET_NAME || 'latelia';
-
+const B2_BUCKET_NAME =  'latelia';
+const memoryStorage = multer.memoryStorage();
 // ==================== B2 UPLOAD SERVICE (FIXED) ====================
 class B2UploadService {
   constructor() {
@@ -609,6 +611,46 @@ const uploadProjectImagesArray = multer({
     files: 20
   }
 }).array('images', 20);
+export const uploadSingleImage = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 
+      'image/gif', 'image/webp', 'image/svg+xml',
+      'application/pdf'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed types: ${allowedTypes.join(', ')}`), false);
+    }
+  }
+}).single('file');
+export const uploadMultipleImages = multer({
+  storage: memoryStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 20 // Max 20 files
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 
+      'image/gif', 'image/webp', 'image/svg+xml',
+      'application/pdf'
+    ];
+    
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}`), false);
+    }
+  }
+}).array('files', 20);
 // ==================== EXPORTS ====================
 export {
   // Multer instances
