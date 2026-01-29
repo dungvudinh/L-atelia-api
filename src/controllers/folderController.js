@@ -486,7 +486,33 @@ export const bulkDeleteImages = async (req, res) => {
 export const uploadImageToFolder = async (req, res) => {
   try {
     const { id } = req.params;
-    const { url, key, filename, size } = req.body;
+    const { 
+      url, 
+      thumbnailUrl, // ✅ THÊM: Nhận thumbnailUrl
+      key, 
+      thumbnailKey, // ✅ THÊM: Nhận thumbnailKey
+      filename, 
+      size,
+      thumbnailSize, // ✅ THÊM: Nhận thumbnailSize
+      hasThumbnail, // ✅ THÊM: Nhận hasThumbnail
+      dimensions, // ✅ THÊM: Nhận dimensions (tùy chọn)
+      thumbnailDimensions // ✅ THÊM: Nhận thumbnailDimensions (tùy chọn)
+    } = req.body;
+
+    console.log('🔍 DEBUG - uploadImageToFolder received:', {
+      id,
+      url,
+      thumbnailUrl,
+      key,
+      thumbnailKey,
+      filename,
+      size,
+      thumbnailSize,
+      hasThumbnail,
+      dimensions,
+      thumbnailDimensions,
+      fullBody: req.body // Log toàn bộ body để debug
+    });
 
     if (!url || !key || !filename) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -505,13 +531,35 @@ export const uploadImageToFolder = async (req, res) => {
 
     const imageData = {
       url,
+      thumbnailUrl: thumbnailUrl || null, // ✅ Lưu thumbnailUrl
       key,
+      thumbnailKey: thumbnailKey || null, // ✅ Lưu thumbnailKey
       filename,
       size: size || 0,
-      uploadedAt: new Date()
+      thumbnailSize: thumbnailSize || 0, // ✅ Lưu thumbnailSize
+      dimensions: dimensions || { width: 0, height: 0 }, // ✅ Lưu dimensions
+      thumbnailDimensions: thumbnailDimensions || { // ✅ Lưu thumbnailDimensions
+        width: 300,
+        height: 300
+      },
+      uploadedAt: new Date(),
+      hasThumbnail: hasThumbnail || !!thumbnailUrl // ✅ Lưu hasThumbnail
     };
 
+    console.log('📝 Saving image data to database:', {
+      ...imageData,
+      hasThumbnail: imageData.hasThumbnail,
+      thumbnailUrlExists: !!imageData.thumbnailUrl
+    });
+
     const savedImage = await folder.addImage(imageData);
+
+    console.log('✅ Image saved to database:', {
+      id: savedImage._id,
+      hasThumbnail: savedImage.hasThumbnail,
+      thumbnailUrl: savedImage.thumbnailUrl,
+      thumbnailKey: savedImage.thumbnailKey
+    });
 
     res.status(StatusCodes.OK).json({
       success: true,
@@ -524,7 +572,8 @@ export const uploadImageToFolder = async (req, res) => {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to save image info',
-      error: error.message
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

@@ -1,3 +1,4 @@
+// controllers/mediaController.js
 import { StatusCodes } from "http-status-codes";
 import mediaService from '../services/mediaService.js';
 import { 
@@ -7,7 +8,6 @@ import {
 
 // @desc    Upload featured image to B2
 // @route   POST /api/media/upload-featured-image
-// controllers/mediaController.js - uploadFeaturedImage
 export const uploadFeaturedImage = async (req, res) => {
   try {
     if (!req.b2Files || !req.b2Files[0]) {
@@ -21,9 +21,14 @@ export const uploadFeaturedImage = async (req, res) => {
     
     const uploadResult = {
       url: b2File.url,
+      thumbnailUrl: b2File.thumbnailUrl || null,  // ✅ Thêm thumbnailUrl
       key: b2File.key,
-      filename: b2File.filename,      // ✅ Thêm filename
-      size: b2File.size,              // ✅ Thêm size
+      thumbnailKey: b2File.thumbnailKey || null,  // ✅ Thêm thumbnailKey
+      filename: b2File.filename,
+      originalName: b2File.originalName || b2File.filename,  // ✅ Thêm originalName
+      size: b2File.size,
+      thumbnailSize: b2File.thumbnailSize || 0,  // ✅ Thêm thumbnailSize
+      hasThumbnail: b2File.hasThumbnail || false,  // ✅ Thêm hasThumbnail
       uploaded_at: new Date(),
       storage: 'b2'
     };
@@ -49,17 +54,26 @@ export const uploadFeaturedImage = async (req, res) => {
 // @route   DELETE /api/media/delete-featured-image
 export const deleteFeaturedImage = async (req, res) => {
   try {
-    const { key } = req.body;
+    const { key, thumbnailKey } = req.body;
 
-    if (!key) {
+    if (!key && !thumbnailKey) {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
-        message: 'key is required for B2 storage'
+        message: 'key or thumbnailKey is required'
       });
     }
     
-    await deleteFileFromB2(key);
-    console.log('✅ Deleted from B2:', key);
+    // Xóa cả original và thumbnail nếu có
+    const deletePromises = [];
+    if (key) {
+      deletePromises.push(deleteFileFromB2(key));
+    }
+    if (thumbnailKey) {
+      deletePromises.push(deleteFileFromB2(thumbnailKey));
+    }
+    
+    await Promise.all(deletePromises);
+    console.log('✅ Deleted from B2:', { key, thumbnailKey });
 
     res.status(StatusCodes.OK).json({
       success: true,
@@ -117,15 +131,21 @@ export const createMedia = async (req, res) => {
       });
     }
 
-    // Xử lý featured image từ B2 nếu có
+    // Xử lý featured image từ B2 nếu có (upload trực tiếp)
     if (req.b2Files && req.b2Files.length > 0) {
       const b2File = req.b2Files[0];
       featuredImage = {
         url: b2File.url,
+        thumbnailUrl: b2File.thumbnailUrl || null,  // ✅ Thêm thumbnail
         key: b2File.key,
+        thumbnailKey: b2File.thumbnailKey || null,  // ✅ Thêm thumbnailKey
         filename: b2File.filename,
+        originalName: b2File.originalName || b2File.filename,
         size: b2File.size,
-        uploaded_at: new Date()
+        thumbnailSize: b2File.thumbnailSize || 0,  // ✅ Thêm thumbnailSize
+        hasThumbnail: b2File.hasThumbnail || false,  // ✅ Thêm hasThumbnail
+        uploaded_at: new Date(),
+        storage: 'b2'
       };
     }
 
@@ -168,7 +188,7 @@ export const getMedia = async (req, res) => {
       category,
       search
     } = req.query;
-
+    console.log('QUERY PARAMS', req.query);
     // Gọi service để lấy media
     const result = await mediaService.getMediaService({
       page: parseInt(page),
@@ -177,7 +197,7 @@ export const getMedia = async (req, res) => {
       category,
       search
     });
-    
+    console.log('MEDIA RESULT', result);
     res.status(StatusCodes.OK).json({
       success: true,
       data: result.media,
@@ -245,7 +265,6 @@ export const updateMedia = async (req, res) => {
       featuredImage,
       tags
     } = req.body;
-
     // Parse JSON data nếu có
     if (req.body.data) {
       try {
@@ -262,19 +281,25 @@ export const updateMedia = async (req, res) => {
       }
     }
 
-    // Xử lý featured image mới từ B2 nếu có
-    let hasNewFeaturedImage = false;
-    if (req.b2Files && req.b2Files.length > 0) {
-      const b2File = req.b2Files[0];
-      featuredImage = {
-        url: b2File.url,
-        key: b2File.key,
-        filename: b2File.filename,
-        size: b2File.size,
-        uploaded_at: new Date()
-      };
-      hasNewFeaturedImage = true;
-    }
+    // Xử lý featured image mới từ B2 nếu có (upload trực tiếp)
+    // if (req.b2Files && req.b2Files.length > 0) {
+    //   const b2File = req.b2Files[0];
+    //   console.log(b2File)
+    //   featuredImage = {
+    //     url: b2File.url,
+    //     thumbnailUrl: b2File.thumbnailUrl || null,  // ✅ Thêm thumbnail
+    //     key: b2File.key,
+    //     thumbnailKey: b2File.thumbnailKey || null,  // ✅ Thêm thumbnailKey
+    //     filename: b2File.filename,
+    //     originalName: b2File.originalName || b2File.filename,
+    //     size: b2File.size,
+    //     thumbnailSize: b2File.thumbnailSize || 0,  // ✅ Thêm thumbnailSize
+    //     hasThumbnail: b2File.hasThumbnail || false,  // ✅ Thêm hasThumbnail
+    //     uploaded_at: new Date(),
+    //     storage: 'b2'
+    //   };
+    //   hasNewFeaturedImage = true;
+    // }
 
     // Gọi service để cập nhật media
     const updatedMedia = await mediaService.updateMediaService(id, {
@@ -285,7 +310,7 @@ export const updateMedia = async (req, res) => {
       status,
       featuredImage,
       tags,
-      _hasNewFeaturedImage: hasNewFeaturedImage
+      _hasNewFeaturedImage: false
     });
     
     res.status(StatusCodes.OK).json({
@@ -325,13 +350,21 @@ export const remove = async (req, res) => {
     // Xóa media từ database
     await mediaService.deleteMediaService(id);
 
-    // Xóa featured image từ B2 nếu có
+    // Xóa featured image và thumbnail từ B2 nếu có
+    const keysToDelete = [];
     if (media.featuredImage && media.featuredImage.key) {
+      keysToDelete.push(media.featuredImage.key);
+    }
+    if (media.featuredImage && media.featuredImage.thumbnailKey) {
+      keysToDelete.push(media.featuredImage.thumbnailKey);
+    }
+    
+    if (keysToDelete.length > 0) {
       try {
-        await deleteFileFromB2(media.featuredImage.key);
-        console.log(`🗑️ Deleted featured image from B2: ${media.featuredImage.key}`);
+        await deleteMultipleFromB2(keysToDelete);
+        console.log(`🗑️ Deleted ${keysToDelete.length} files from B2 for media: ${id}`);
       } catch (b2Error) {
-        console.error('Error deleting image from B2:', b2Error);
+        console.error('Error deleting files from B2:', b2Error);
       }
     }
 
@@ -378,14 +411,20 @@ export const bulkDeleteMedia = async (req, res) => {
     // Gọi service để xóa nhiều media
     const result = await mediaService.bulkDeleteMediaService(ids);
 
-    // Xóa featured images từ B2 nếu có
-    const keysToDelete = mediaItems
-      .filter(media => media.featuredImage && media.featuredImage.key)
-      .map(media => media.featuredImage.key);
+    // Xóa featured images và thumbnails từ B2 nếu có
+    const keysToDelete = [];
+    mediaItems.forEach(media => {
+      if (media.featuredImage && media.featuredImage.key) {
+        keysToDelete.push(media.featuredImage.key);
+      }
+      if (media.featuredImage && media.featuredImage.thumbnailKey) {
+        keysToDelete.push(media.featuredImage.thumbnailKey);
+      }
+    });
     
     if (keysToDelete.length > 0) {
       await deleteMultipleFromB2(keysToDelete);
-      console.log(`🗑️ Deleted ${keysToDelete.length} featured images from B2`);
+      console.log(`🗑️ Deleted ${keysToDelete.length} files from B2`);
     }
 
     res.status(StatusCodes.OK).json({

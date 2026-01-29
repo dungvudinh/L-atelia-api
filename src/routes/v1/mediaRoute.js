@@ -64,7 +64,7 @@ router.route('/bulk-delete')
 
 router.route('/:id')
   .get(getMediaById)
-  .put(uploadMediaSingle, handleMulterError, updateMedia) // Thêm upload middleware cho update
+  .put(updateMedia) // Thêm upload middleware cho update
   .delete(remove);
 
 export default router;

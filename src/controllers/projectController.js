@@ -7,50 +7,20 @@ import { Project } from '../models/projectModel.js';
 // controllers/projectController.js - Sửa hàm createProject
 export const createProject = async (req, res, next) => {
   try {
-    console.log('=== CREATE PROJECT ===');
+    console.log('=== CREATE PROJECT WITH THUMBNAILS ===');
     
-    // Nhận JSON trực tiếp từ body
     const projectData = req.body;
     
-    console.log('Project data received:', {
+    console.log('Project data received with thumbnails:', {
       title: projectData.title,
+      heroImageHasThumbnail: projectData.heroImage?.thumbnailUrl ? 'Yes' : 'No',
       galleryCount: projectData.gallery?.length || 0,
-      constructionProgressCount: projectData.constructionProgress?.length || 0,
-      designImagesCount: projectData.designImages?.length || 0,
-      brochureCount: projectData.brochure?.length || 0
+      galleryWithThumbnails: projectData.gallery?.filter(img => img.thumbnailUrl)?.length || 0
     });
     
-    // Chuẩn hóa dữ liệu ảnh
     const currentDate = new Date();
     
-    // Hàm chuẩn hóa image object đơn giản
-    const normalizeImage = (imgData) => {
-      if (!imgData) return null;
-      
-      if (typeof imgData === 'object' && imgData.url) {
-        return {
-          url: imgData.url,
-          uploaded_at: imgData.uploaded_at || currentDate
-        };
-      }
-      
-      if (typeof imgData === 'string') {
-        return {
-          url: imgData,
-          uploaded_at: currentDate
-        };
-      }
-      
-      return null;
-    };
-    
-    // Chuẩn hóa các mảng ảnh
-    const normalizeImageArray = (array) => {
-      if (!array || !Array.isArray(array)) return [];
-      return array.map(normalizeImage).filter(img => img !== null);
-    };
-    
-    // Tạo project object đã chuẩn hóa
+    // Tạo project object đã chuẩn hóa với thumbnail
     const projectToCreate = {
       title: projectData.title || '',
       description: projectData.description || '',
@@ -61,37 +31,35 @@ export const createProject = async (req, res, next) => {
       propertyHighlights: projectData.propertyHighlights || [],
       specialSections: projectData.specialSections || [],
       
-      // Chuẩn hóa các trường ảnh
-      heroImage: normalizeImage(projectData.heroImage),
-      gallery: normalizeImageArray(projectData.gallery),
-      constructionProgress: normalizeImageArray(projectData.constructionProgress),
-      designImages: normalizeImageArray(projectData.designImages),
-      brochure: normalizeImageArray(projectData.brochure),
+      // Chuẩn hóa các trường ảnh với thumbnail
+      heroImage: normalizeImageWithThumbnail(projectData.heroImage),
+      gallery: normalizeImageArrayWithThumbnail(projectData.gallery),
+      constructionProgress: normalizeImageArrayWithThumbnail(projectData.constructionProgress),
+      designImages: normalizeImageArrayWithThumbnail(projectData.designImages),
+      brochure: normalizeImageArrayWithThumbnail(projectData.brochure),
       
       createdAt: currentDate,
       updatedAt: currentDate
     };
     
-    console.log('Normalized project:', {
-      heroImage: projectToCreate.heroImage ? 'Yes' : 'No',
+    console.log('Normalized project with thumbnails:', {
+      heroImage: projectToCreate.heroImage ? (projectToCreate.heroImage.hasThumbnail ? 'Has thumbnail' : 'No thumbnail') : 'No',
       gallery: projectToCreate.gallery.length,
-      constructionProgress: projectToCreate.constructionProgress.length,
-      designImages: projectToCreate.designImages.length,
-      brochure: projectToCreate.brochure.length
+      galleryThumbnails: projectToCreate.gallery.filter(img => img.hasThumbnail).length
     });
     
     const project = await projectService.createProjectService(projectToCreate);
     
     res.status(StatusCodes.CREATED).json({
       success: true,
-      message: 'Create project successfully',
+      message: 'Create project successfully with thumbnails',
       data: project
     });
   } catch (err) {
     next(err);
   }
 };
-
+// controllers/projectController.js - Cập nhật getProjects
 export const getProjects = async (req, res, next) => {
   try {
     const filters = {
@@ -101,7 +69,26 @@ export const getProjects = async (req, res, next) => {
       limit: req.query.limit
     };
     
-    const result = await projectService.getProjectsService(filters);
+    // Chỉ lấy các trường cần thiết cho danh sách
+    const projection = {
+      title: 1,
+      location: 1,
+      status: 1,
+      createdAt: 1,
+      'heroImage.url': 1,
+      'heroImage.thumbnailUrl': 1,
+      'heroImage.thumbnailSize': 1,
+      'heroImage.size': 1,
+      'heroImage.hasThumbnail': 1, 
+      'gallery.url': 1,
+      'gallery.thumbnailUrl': 1,
+      'gallery.thumbnailSize': 1,
+      'gallery.size': 1,
+      'gallery.hasThumbnail': 1, 
+      location:1
+    };
+    
+    const result = await projectService.getProjectsService(filters, projection);
     res.status(StatusCodes.OK).json({
       success: true,
       data: result
@@ -113,7 +100,23 @@ export const getProjects = async (req, res, next) => {
 
 export const getProjectById = async (req, res, next) => {
   try {
-    const project = await projectService.getProjectByIdService(req.params.id);
+    const project = await Project.findById(req.params.id);
+    
+    if (!project) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        success: false,
+        message: 'Project not found'
+      });
+    }
+    
+    // Log thông tin thumbnail
+    console.log('Project retrieved with thumbnails:', {
+      title: project.title,
+      heroImageHasThumbnail: project.heroImage?.hasThumbnail || false,
+      galleryThumbnails: project.gallery?.filter(img => img.hasThumbnail).length || 0,
+      totalGallery: project.gallery?.length || 0
+    });
+    
     res.status(StatusCodes.OK).json({
       success: true,
       data: project
@@ -137,50 +140,20 @@ export const getProjectBySlug = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
   try {
-    console.log('=== SERVER: UPDATE REQUEST ===');
+    console.log('=== SERVER: UPDATE PROJECT WITH THUMBNAILS ===');
     const { id } = req.params;
     
-    // Nhận JSON trực tiếp từ body
     const updateData = req.body;
     
-    console.log('Update data received:', {
+    console.log('Update data with thumbnails:', {
       title: updateData.title,
-      galleryCount: updateData.gallery?.length || 0,
-      constructionProgressCount: updateData.constructionProgress?.length || 0,
-      designImagesCount: updateData.designImages?.length || 0,
-      brochureCount: updateData.brochure?.length || 0
+      heroImageHasThumbnail: updateData.heroImage?.thumbnailUrl ? 'Yes' : 'No',
+      galleryThumbnails: updateData.gallery?.filter(img => img.thumbnailUrl)?.length || 0
     });
     
     const currentDate = new Date();
     
-    // Hàm chuẩn hóa image object
-    const normalizeImage = (imgData) => {
-      if (!imgData) return null;
-      
-      if (typeof imgData === 'object' && imgData.url) {
-        return {
-          url: imgData.url,
-          uploaded_at: imgData.uploaded_at || currentDate
-        };
-      }
-      
-      if (typeof imgData === 'string') {
-        return {
-          url: imgData,
-          uploaded_at: currentDate
-        };
-      }
-      
-      return null;
-    };
-    
-    // Chuẩn hóa các mảng ảnh
-    const normalizeImageArray = (array) => {
-      if (!array || !Array.isArray(array)) return [];
-      return array.map(normalizeImage).filter(img => img !== null);
-    };
-    
-    // Chuẩn hóa dữ liệu update
+    // Chuẩn hóa dữ liệu update với thumbnail
     const normalizedUpdateData = {
       updatedAt: currentDate,
       title: updateData.title,
@@ -192,27 +165,27 @@ export const update = async (req, res, next) => {
       propertyHighlights: updateData.propertyHighlights || [],
       specialSections: updateData.specialSections || [],
       
-      // Chuẩn hóa các trường ảnh
-      heroImage: normalizeImage(updateData.heroImage),
-      gallery: normalizeImageArray(updateData.gallery),
-      constructionProgress: normalizeImageArray(updateData.constructionProgress),
-      designImages: normalizeImageArray(updateData.designImages),
-      brochure: normalizeImageArray(updateData.brochure)
+      // Chuẩn hóa các trường ảnh với thumbnail
+      heroImage: normalizeImageWithThumbnail(updateData.heroImage),
+      gallery: normalizeImageArrayWithThumbnail(updateData.gallery),
+      constructionProgress: normalizeImageArrayWithThumbnail(updateData.constructionProgress),
+      designImages: normalizeImageArrayWithThumbnail(updateData.designImages),
+      brochure: normalizeImageArrayWithThumbnail(updateData.brochure)
     };
     
-    console.log('Final update data:', {
+    console.log('Final update data with thumbnails:', {
       gallery: normalizedUpdateData.gallery.length,
+      galleryThumbnails: normalizedUpdateData.gallery.filter(img => img.hasThumbnail).length,
       constructionProgress: normalizedUpdateData.constructionProgress.length,
-      designImages: normalizedUpdateData.designImages.length,
-      brochure: normalizedUpdateData.brochure.length,
-      heroImage: normalizedUpdateData.heroImage ? 'Yes' : 'No'
+      constructionThumbnails: normalizedUpdateData.constructionProgress.filter(img => img.hasThumbnail).length,
+      heroImage: normalizedUpdateData.heroImage ? (normalizedUpdateData.heroImage.hasThumbnail ? 'Has thumbnail' : 'No') : 'No'
     });
     
     const project = await projectService.updateProjectService(id, normalizedUpdateData);
     
     res.status(StatusCodes.OK).json({
       success: true,
-      message: 'Update project successfully',
+      message: 'Update project successfully with thumbnails',
       data: project
     });
   } catch (err) {
@@ -259,4 +232,36 @@ export const deleteImages = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+const normalizeImageWithThumbnail = (imgData) => {
+  if (!imgData) return null;
+  
+  if (typeof imgData === 'object' && imgData.url) {
+    return {
+      url: imgData.url,
+      thumbnailUrl: imgData.thumbnailUrl || null,
+      key: imgData.key || null,
+      thumbnailKey: imgData.thumbnailKey || null,
+      filename: imgData.filename || 'unnamed.jpg',
+      size: imgData.size || 0,
+      thumbnailSize: imgData.thumbnailSize || 0,
+      uploaded_at: imgData.uploaded_at || new Date(),
+      hasThumbnail: imgData.hasThumbnail || !!imgData.thumbnailUrl
+    };
+  }
+  
+  if (typeof imgData === 'string') {
+    return {
+      url: imgData,
+      filename: imgData.split('/').pop() || 'unnamed.jpg',
+      uploaded_at: new Date(),
+      hasThumbnail: false
+    };
+  }
+  
+  return null;
+};
+const normalizeImageArrayWithThumbnail = (array) => {
+  if (!array || !Array.isArray(array)) return [];
+  return array.map(normalizeImageWithThumbnail).filter(img => img !== null);
 };

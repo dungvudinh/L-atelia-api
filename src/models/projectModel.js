@@ -1,10 +1,17 @@
-// models/Project.js
+// models/projectModel.js
 import mongoose from 'mongoose';
 
-// Schema đơn giản hóa
+// Schema với thumbnail support
 const imageSchema = new mongoose.Schema({
-  url: { type: String, required: true },
-  uploaded_at: { type: Date, default: Date.now }
+  url: { type: String, required: true },           // Original image URL
+  thumbnailUrl: { type: String, default: null },   // Thumbnail URL (nếu có)
+  key: { type: String, default: null },            // B2 key for original
+  thumbnailKey: { type: String, default: null },   // B2 key for thumbnail
+  filename: { type: String, required: true },
+  size: { type: Number, default: 0 },
+  thumbnailSize: { type: Number, default: 0 },
+  uploaded_at: { type: Date, default: Date.now },
+  hasThumbnail: { type: Boolean, default: false }
 }, { _id: true });
 
 const projectSchema = new mongoose.Schema({
@@ -17,7 +24,7 @@ const projectSchema = new mongoose.Schema({
   },
   location: String,
   
-  // Images - CHỈ LƯU URL
+  // Images - LƯU CẢ ORIGINAL VÀ THUMBNAIL
   heroImage: imageSchema,
   gallery: [imageSchema],
   constructionProgress: [imageSchema],
@@ -31,6 +38,23 @@ const projectSchema = new mongoose.Schema({
   
   specifications: [{
     text: String
+  }],
+
+  propertyHighlights: [{
+    title: String,
+    description: String,
+    featureSections: [{
+      name: String,
+      description: String
+    }]
+  }],
+
+  specialSections: [{
+    type: { type: String, enum: ['architecture', 'history', 'details'] },
+    title: String,
+    shortDescription: String,
+    fullDescription: String,
+    isExpandable: { type: Boolean, default: true }
   }],
 
   // Timestamps

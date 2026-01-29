@@ -44,7 +44,7 @@ export const createProjectService = async (projectData) => {
   }
 };
 
-const getProjectsService = async (filters = {}) => {
+const getProjectsService = async (filters = {}, projection = {}) => {
   try {
     const { search, status, page = 1, limit = 10 } = filters;
     
@@ -61,11 +61,11 @@ const getProjectsService = async (filters = {}) => {
       query.status = status;
     }
 
-    const projects = await Project.find(query)
+    // Sử dụng projection để chỉ lấy các trường cần thiết
+    const projects = await Project.find(query, projection)
       .sort({ createdAt: -1 })
       .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .select('-propertyHighlights -specialSections');
+      .skip((page - 1) * limit);
 
     const total = await Project.countDocuments(query);
 
@@ -112,7 +112,7 @@ export const updateProjectService = async (id, projectData) => {
       throw new Error('Project not found');
     }
 
-    console.log('=== UPDATE SERVICE DEBUG ===');
+    console.log('=== UPDATE SERVICE WITH THUMBNAILS ===');
     
     const updateFields = {
       updatedAt: new Date()
@@ -131,16 +131,16 @@ export const updateProjectService = async (id, projectData) => {
       }
     });
 
-    // ========== XỬ LÝ TẤT CẢ CÁC LOẠI ẢNH ==========
+    // ========== XỬ LÝ TẤT CẢ CÁC LOẠI ẢNH VỚI THUMBNAIL ==========
     
-    // Hàm helper để xử lý image arrays
-    const processImageArrayField = (fieldName, data) => {
+    // Hàm helper để xử lý image arrays với thumbnail
+    const processImageArrayFieldWithThumbnail = (fieldName, data) => {
       if (data[fieldName] !== undefined) {
-        // Filter out blob URLs (chỉ giữ lại URLs từ B2)
+        // Filter out blob URLs và giữ lại cả original và thumbnail
         const validItems = (data[fieldName] || []).filter(item => {
           if (!item) return false;
           
-          // Xác định URL
+          // Xác định URL original
           let url;
           if (typeof item === 'object') {
             url = item.url || item;
@@ -148,15 +148,14 @@ export const updateProjectService = async (id, projectData) => {
             url = item;
           }
           
-          // Chỉ giữ lại URLs đã upload lên B2
+          // Chỉ giữ lại URLs đã upload lên B2 (không phải blob/data URLs)
           const isValid = url && !url.startsWith('blob:') && !url.startsWith('data:');
-          if (!isValid && url) {
-            console.log(`Filtering out blob URL from ${fieldName}: ${url.substring(0, 50)}`);
-          }
           return isValid;
         });
         
         console.log(`${fieldName}: ${validItems.length} valid items`);
+        console.log(`${fieldName} thumbnails: ${validItems.filter(item => item.thumbnailUrl).length} items have thumbnails`);
+        
         updateFields[fieldName] = validItems;
       }
     };
@@ -170,23 +169,36 @@ export const updateProjectService = async (id, projectData) => {
     ];
     
     imageArrayFields.forEach(field => {
-      processImageArrayField(field, projectData);
+      processImageArrayFieldWithThumbnail(field, projectData);
     });
     
-    // Process heroImage (single)
+    // Process heroImage (single) với thumbnail
     if (projectData.heroImage !== undefined) {
       if (projectData.heroImage) {
-        const heroUrl = typeof projectData.heroImage === 'object' 
-          ? projectData.heroImage.url 
-          : projectData.heroImage;
-        
-        // Chỉ giữ lại nếu không phải blob URL
-        if (heroUrl && !heroUrl.startsWith('blob:') && !heroUrl.startsWith('data:')) {
-          updateFields.heroImage = projectData.heroImage;
-          console.log('HeroImage: Valid');
-        } else {
-          updateFields.heroImage = null;
-          console.log('HeroImage: Filtered out (blob URL)');
+        // Kiểm tra heroImage object
+        if (typeof projectData.heroImage === 'object') {
+          const heroUrl = projectData.heroImage.url;
+          const hasThumbnail = !!projectData.heroImage.thumbnailUrl;
+          
+          // Chỉ giữ lại nếu không phải blob URL
+          if (heroUrl && !heroUrl.startsWith('blob:') && !heroUrl.startsWith('data:')) {
+            updateFields.heroImage = projectData.heroImage;
+            console.log(`HeroImage: Valid ${hasThumbnail ? 'with thumbnail' : 'no thumbnail'}`);
+          } else {
+            updateFields.heroImage = null;
+            console.log('HeroImage: Filtered out (blob URL)');
+          }
+        } else if (typeof projectData.heroImage === 'string') {
+          // Nếu là string URL (legacy)
+          if (!projectData.heroImage.startsWith('blob:') && !projectData.heroImage.startsWith('data:')) {
+            updateFields.heroImage = {
+              url: projectData.heroImage,
+              filename: projectData.heroImage.split('/').pop() || 'hero.jpg',
+              uploaded_at: new Date(),
+              hasThumbnail: false
+            };
+            console.log('HeroImage: String URL (legacy, no thumbnail)');
+          }
         }
       } else {
         updateFields.heroImage = null;
@@ -194,39 +206,11 @@ export const updateProjectService = async (id, projectData) => {
       }
     }
 
-    // ========== XỬ LÝ ẢNH MỚI UPLOAD ==========
-    if (projectData._hasNewFiles) {
-      // Hàm xóa file từ B2
-      const safeDeleteFile = async (fileInfo) => {
-        if (!fileInfo || !fileInfo.key) return;
-        
-        try {
-          await deleteMultipleFromB2([fileInfo.key]);
-          console.log(`Deleted old B2 file: ${fileInfo.key.substring(0, 50)}`);
-        } catch (deleteError) {
-          console.error('Could not delete B2 file:', deleteError.message);
-        }
-      };
-
-      // Xử lý heroImage mới
-      if (projectData.heroImage && updateFields.heroImage) {
-        // Xóa heroImage cũ nếu có
-        if (existingProject.heroImage && existingProject.heroImage.key) {
-          await safeDeleteFile(existingProject.heroImage);
-        }
-      }
-
-      // Xử lý các loại ảnh mới khác
-      // (Controller đã merge ảnh mới vào array, nên ở đây chỉ cần lưu)
-      console.log('New files were uploaded, updating image arrays');
-    }
-
-    console.log('=== FINAL UPDATE FIELDS ===');
-    console.log('Gallery:', updateFields.gallery?.length || 0);
-    console.log('ConstructionProgress:', updateFields.constructionProgress?.length || 0);
-    console.log('DesignImages:', updateFields.designImages?.length || 0);
-    console.log('Brochure:', updateFields.brochure?.length || 0);
-    console.log('HeroImage:', updateFields.heroImage ? 'Yes' : 'No');
+    console.log('=== FINAL UPDATE FIELDS WITH THUMBNAILS ===');
+    console.log('HeroImage hasThumbnail:', updateFields.heroImage?.hasThumbnail || false);
+    console.log('Gallery items:', updateFields.gallery?.length || 0);
+    console.log('Gallery thumbnails:', updateFields.gallery?.filter(img => img.hasThumbnail).length || 0);
+    console.log('ConstructionProgress thumbnails:', updateFields.constructionProgress?.filter(img => img.hasThumbnail).length || 0);
 
     const updatedProject = await Project.findByIdAndUpdate(
       id, 

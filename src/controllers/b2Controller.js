@@ -1,4 +1,3 @@
-// controllers/b2Controller.js - COMPLETE PROXY SOLUTION
 import { StatusCodes } from "http-status-codes";
 import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import crypto from 'crypto';
@@ -17,12 +16,15 @@ const s3Client = new S3Client({
 
 const B2_BUCKET_NAME = 'latelia';
 const B2_PUBLIC_URL = 'https://f005.backblazeb2.com/file/latelia';
+const THUMBNAIL_WIDTH = 700;
+const THUMBNAIL_HEIGHT = 500;
+const THUMBNAIL_QUALITY = 100;
 
-// @desc    Upload file via backend proxy (no CORS issues)
+// @desc    Upload file via backend proxy với thumbnail
 // @route   POST /api/b2/upload
 export const uploadFile = async (req, res) => {
   try {
-    console.log('🔄 Uploading file via backend proxy...');
+    console.log('🔄 Uploading file via backend proxy with thumbnail...');
     
     const { folder = 'general' } = req.body;
     
@@ -57,79 +59,135 @@ export const uploadFile = async (req, res) => {
     
     // Create folder path
     const folderPath = folder ? `${folder}/`.replace(/\/\//g, '/') : '';
-    const fileKey = `${folderPath}${uniqueFilename}`.replace(/\/\//g, '/');
+    
+    // Original file key
+    const originalKey = `${folderPath}${uniqueFilename}`.replace(/\/\//g, '/');
+    
+    // Thumbnail file key (thêm suffix -thumb)
+    const extension = safeName.split('.').pop();
+    const thumbnailName = uniqueFilename.replace(`.${extension}`, `-thumb.${extension}`);
+    const thumbnailKey = `${folderPath}thumbnails/${thumbnailName}`.replace(/\/\//g, '/');
 
     console.log('📁 File upload details:', {
       originalName,
       filename: uniqueFilename,
-      key: fileKey,
+      originalKey,
+      thumbnailKey,
       size: req.file.size,
       type: req.file.mimetype,
       folder
     });
 
-    // Process image if it's an image
-    let fileBuffer = req.file.buffer;
-    let contentType = req.file.mimetype;
+    let originalBuffer = req.file.buffer;
+    let thumbnailBuffer = null;
+    let originalContentType = req.file.mimetype;
     
+    // Process image for both original and thumbnail
     if (req.file.mimetype.startsWith('image/')) {
       try {
         console.log('🖼️ Processing image optimization...');
-        fileBuffer = await processImage(fileBuffer);
-        contentType = 'image/webp'; // Convert to WebP for better compression
+        
+        // Process original image (optimize)
+        originalBuffer = await processImage(originalBuffer, {
+          maxWidth: 1920,
+          maxHeight: 1080,
+          format: 'webp',
+          quality: 85
+        });
+        originalContentType = 'image/webp';
+        
+        // Create thumbnail
+        try {
+          thumbnailBuffer = await createThumbnail(req.file.buffer, {
+            width: THUMBNAIL_WIDTH,
+            height: THUMBNAIL_HEIGHT,
+            quality: THUMBNAIL_QUALITY
+          });
+          console.log('✅ Thumbnail created successfully');
+        } catch (thumbError) {
+          console.warn('⚠️ Thumbnail creation failed:', thumbError.message);
+          // Continue without thumbnail
+        }
+        
       } catch (imageError) {
         console.warn('⚠️ Image processing failed, using original:', imageError.message);
         // Continue with original file
       }
     }
 
-    // Upload to B2
-    const uploadParams = {
+    // Upload original to B2
+    const originalUploadParams = {
       Bucket: B2_BUCKET_NAME,
-      Key: fileKey,
-      Body: fileBuffer,
-      ContentType: contentType,
+      Key: originalKey,
+      Body: originalBuffer,
+      ContentType: originalContentType,
       Metadata: {
         'original-filename': originalName,
         'upload-timestamp': timestamp.toString(),
         'uploaded-by': req.user?._id || 'anonymous',
         'upload-method': 'backend-proxy',
-        'optimized': fileBuffer !== req.file.buffer ? 'true' : 'false'
+        'optimized': 'true',
+        'type': 'original'
       }
     };
 
-    console.log('🚀 Uploading to B2...');
-    const command = new PutObjectCommand(uploadParams);
+    console.log('🚀 Uploading original to B2...');
+    const originalCommand = new PutObjectCommand(originalUploadParams);
+    const originalResult = await s3Client.send(originalCommand);
     
-    const startTime = Date.now();
-    const result = await s3Client.send(command);
-    const uploadTime = Date.now() - startTime;
+    const originalUrl = `${B2_PUBLIC_URL}/${originalKey}`;
     
-    console.log('✅ Upload successful:', {
-      key: fileKey,
-      etag: result.ETag,
-      size: fileBuffer.length,
-      uploadTime: `${uploadTime}ms`
-    });
-
-    const publicUrl = `${B2_PUBLIC_URL}/${fileKey}`;
+    let thumbnailUrl = null;
+    
+    // Upload thumbnail if created
+    if (thumbnailBuffer) {
+      try {
+        const thumbnailUploadParams = {
+          Bucket: B2_BUCKET_NAME,
+          Key: thumbnailKey,
+          Body: thumbnailBuffer,
+          ContentType: 'image/webp',
+          Metadata: {
+            'original-filename': originalName,
+            'upload-timestamp': timestamp.toString(),
+            'upload-method': 'backend-proxy',
+            'type': 'thumbnail',
+            'dimensions': `${THUMBNAIL_WIDTH}x${THUMBNAIL_HEIGHT}`
+          }
+        };
+        
+        console.log('🚀 Uploading thumbnail to B2...');
+        const thumbnailCommand = new PutObjectCommand(thumbnailUploadParams);
+        await s3Client.send(thumbnailCommand);
+        
+        thumbnailUrl = `${B2_PUBLIC_URL}/${thumbnailKey}`;
+        console.log('✅ Thumbnail uploaded successfully');
+        
+      } catch (thumbUploadError) {
+        console.warn('⚠️ Thumbnail upload failed:', thumbUploadError.message);
+        // Continue without thumbnail URL
+      }
+    }
 
     res.status(StatusCodes.OK).json({
       success: true,
       data: {
-        url: publicUrl,
-        key: fileKey,
+        url: originalUrl, // Original URL
+        thumbnailUrl: thumbnailUrl, // Thumbnail URL
+        key: originalKey,
+        thumbnailKey: thumbnailKey,
         filename: uniqueFilename,
         originalName,
-        size: fileBuffer.length,
+        size: originalBuffer.length,
         originalSize: req.file.size,
-        type: contentType,
-        etag: result.ETag,
+        type: originalContentType,
+        etag: originalResult.ETag,
         uploadedAt: new Date().toISOString(),
-        optimized: fileBuffer !== req.file.buffer,
-        uploadTime
+        optimized: true,
+        hasThumbnail: !!thumbnailUrl,
+        thumbnailDimensions: thumbnailUrl ? `${THUMBNAIL_WIDTH}x${THUMBNAIL_HEIGHT}` : null
       },
-      message: 'File uploaded successfully'
+      message: 'File uploaded successfully with thumbnail'
     });
 
   } catch (error) {
@@ -143,7 +201,7 @@ export const uploadFile = async (req, res) => {
   }
 };
 
-// @desc    Upload multiple files
+// @desc    Upload multiple files với thumbnail
 // @route   POST /api/b2/upload-multiple
 export const uploadMultipleFiles = async (req, res) => {
   try {
@@ -156,7 +214,7 @@ export const uploadMultipleFiles = async (req, res) => {
       });
     }
 
-    console.log(`📦 Processing ${req.files.length} files for upload...`);
+    console.log(`📦 Processing ${req.files.length} files for upload with thumbnails...`);
     
     const uploadPromises = req.files.map(async (file, index) => {
       try {
@@ -169,33 +227,101 @@ export const uploadMultipleFiles = async (req, res) => {
           .replace(/-+/g, '-');
         
         const uniqueFilename = `${timestamp}-${index}-${randomString}-${safeName}`;
-        const fileKey = `${folder}/${uniqueFilename}`.replace(/\/\//g, '/');
+        
+        // Original file key
+        const originalKey = `${folder}/${uniqueFilename}`.replace(/\/\//g, '/');
+        
+        // Thumbnail file key
+        const extension = safeName.split('.').pop();
+        const thumbnailName = uniqueFilename.replace(`.${extension}`, `-thumb.${extension}`);
+        const thumbnailKey = `${folder}/thumbnails/${thumbnailName}`.replace(/\/\//g, '/');
 
-        // Upload each file
-        const command = new PutObjectCommand({
+        let originalBuffer = file.buffer;
+        let thumbnailBuffer = null;
+        let contentType = file.mimetype;
+
+        // Process image and create thumbnail
+        if (file.mimetype.startsWith('image/')) {
+          try {
+            // Optimize original
+            originalBuffer = await processImage(file.buffer, {
+              maxWidth: 1920,
+              maxHeight: 1080,
+              format: 'webp',
+              quality: 85
+            });
+            contentType = 'image/webp';
+            
+            // Create thumbnail
+            thumbnailBuffer = await createThumbnail(file.buffer, {
+              width: THUMBNAIL_WIDTH,
+              height: THUMBNAIL_HEIGHT,
+              quality: THUMBNAIL_QUALITY
+            });
+          } catch (imgError) {
+            console.warn(`⚠️ Image processing failed for ${file.originalname}:`, imgError.message);
+            // Continue with original
+          }
+        }
+
+        // Upload original
+        const originalCommand = new PutObjectCommand({
           Bucket: B2_BUCKET_NAME,
-          Key: fileKey,
-          Body: file.buffer,
-          ContentType: file.mimetype,
+          Key: originalKey,
+          Body: originalBuffer,
+          ContentType: contentType,
           Metadata: {
             'original-filename': file.originalname,
             'upload-timestamp': timestamp.toString()
           }
         });
 
-        await s3Client.send(command);
+        await s3Client.send(originalCommand);
         
-        const publicUrl = `${B2_PUBLIC_URL}/${fileKey}`;
+        const originalUrl = `${B2_PUBLIC_URL}/${originalKey}`;
+        let thumbnailUrl = null;
+        
+        // Upload thumbnail if created
+        if (thumbnailBuffer) {
+          try {
+            const thumbnailCommand = new PutObjectCommand({
+              Bucket: B2_BUCKET_NAME,
+              Key: thumbnailKey,
+              Body: thumbnailBuffer,
+              ContentType: 'image/webp',
+              Metadata: {
+                'original-filename': file.originalname,
+                'upload-timestamp': timestamp.toString(),
+                'type': 'thumbnail'
+              }
+            });
+            
+            await s3Client.send(thumbnailCommand);
+            thumbnailUrl = `${B2_PUBLIC_URL}/${thumbnailKey}`;
+            
+          } catch (thumbUploadError) {
+            console.warn(`⚠️ Thumbnail upload failed for ${file.originalname}:`, thumbUploadError.message);
+          }
+        }
         
         return {
           success: true,
           data: {
-            url: publicUrl,
-            key: fileKey,
+            url: originalUrl,
+            thumbnailUrl: thumbnailUrl, // ✅ Có thumbnailUrl
+            key: originalKey,
+            thumbnailKey: thumbnailUrl ? thumbnailKey : null, // ✅ Có thumbnailKey (nếu có thumbnail)
             filename: uniqueFilename,
             originalName: file.originalname,
-            size: file.size,
-            type: file.mimetype
+            size: originalBuffer.length,
+            thumbnailSize: thumbnailBuffer ? thumbnailBuffer.length : 0, // ✅ Có thumbnailSize
+            type: contentType,
+            hasThumbnail: !!thumbnailUrl, // ✅ Có flag hasThumbnail
+            dimensions: { width: 0, height: 0 }, // Placeholder, có thể tính từ sharp metadata
+            thumbnailDimensions: thumbnailUrl ? { 
+              width: THUMBNAIL_WIDTH, 
+              height: THUMBNAIL_HEIGHT 
+            } : null
           }
         };
         
@@ -226,7 +352,7 @@ export const uploadMultipleFiles = async (req, res) => {
           error: r.error
         }))
       },
-      message: `Uploaded ${successfulUploads.length}/${req.files.length} files successfully`
+      message: `Uploaded ${successfulUploads.length}/${req.files.length} files with thumbnails`
     });
 
   } catch (error) {
@@ -239,11 +365,11 @@ export const uploadMultipleFiles = async (req, res) => {
   }
 };
 
-// @desc    Delete file from B2
+// @desc    Delete file from B2 (cả original và thumbnail)
 // @route   DELETE /api/b2/files
 export const deleteFile = async (req, res) => {
   try {
-    const { fileKey } = req.body;
+    const { fileKey, thumbnailKey } = req.body;
 
     if (!fileKey) {
       return res.status(StatusCodes.BAD_REQUEST).json({
@@ -253,19 +379,50 @@ export const deleteFile = async (req, res) => {
     }
 
     console.log('🗑️ Deleting file:', fileKey);
+    
+    const deletePromises = [];
 
-    const command = new DeleteObjectCommand({
-      Bucket: B2_BUCKET_NAME,
-      Key: fileKey
-    });
+    // Delete original
+    deletePromises.push(
+      s3Client.send(new DeleteObjectCommand({
+        Bucket: B2_BUCKET_NAME,
+        Key: fileKey
+      }))
+    );
 
-    await s3Client.send(command);
+    // Delete thumbnail if key provided
+    if (thumbnailKey) {
+      deletePromises.push(
+        s3Client.send(new DeleteObjectCommand({
+          Bucket: B2_BUCKET_NAME,
+          Key: thumbnailKey
+        }))
+      );
+    }
 
-    console.log('✅ File deleted successfully');
+    // Also try to guess thumbnail key if not provided
+    else {
+      const extension = fileKey.split('.').pop();
+      const baseName = fileKey.replace(`.${extension}`, '');
+      const possibleThumbnailKey = `${baseName}-thumb.${extension}`;
+      
+      deletePromises.push(
+        s3Client.send(new DeleteObjectCommand({
+          Bucket: B2_BUCKET_NAME,
+          Key: possibleThumbnailKey
+        })).catch(err => {
+          console.log('ℹ️ No thumbnail found to delete:', possibleThumbnailKey);
+        })
+      );
+    }
+
+    await Promise.all(deletePromises);
+    
+    console.log('✅ Files deleted successfully');
 
     res.status(StatusCodes.OK).json({
       success: true,
-      message: 'File deleted successfully'
+      message: 'File(s) deleted successfully'
     });
 
   } catch (error) {
@@ -275,6 +432,85 @@ export const deleteFile = async (req, res) => {
       message: 'Delete failed',
       error: error.message
     });
+  }
+};
+
+// Helper function: Create thumbnail
+const createThumbnail = async (buffer, options = {}) => {
+  const {
+    width = THUMBNAIL_WIDTH,
+    height = THUMBNAIL_HEIGHT,
+    quality = THUMBNAIL_QUALITY
+  } = options;
+
+  try {
+    const thumbnailBuffer = await sharp(buffer)
+      .resize({
+        width,
+        height,
+        fit: 'cover',
+        position: 'center'
+      })
+      .webp({ 
+        quality,
+        effort: 3 // Balanced compression
+      })
+      .toBuffer();
+    
+    const originalSize = (buffer.length / 1024).toFixed(1);
+    const thumbSize = (thumbnailBuffer.length / 1024).toFixed(1);
+    
+    console.log(`📸 Thumbnail created: ${originalSize}KB → ${thumbSize}KB (${width}x${height})`);
+    
+    return thumbnailBuffer;
+    
+  } catch (error) {
+    console.warn('⚠️ Thumbnail creation failed:', error.message);
+    throw error;
+  }
+};
+
+// Helper function: Process and optimize image (updated)
+const processImage = async (buffer, options = {}) => {
+  try {
+    const {
+      maxWidth = 1920,
+      maxHeight = 1080,
+      format = 'webp',
+      quality = 85
+    } = options;
+    
+    const metadata = await sharp(buffer).metadata();
+    
+    let resizeOptions = {};
+    if (metadata.width > maxWidth || metadata.height > maxHeight) {
+      resizeOptions = {
+        width: metadata.width > maxWidth ? maxWidth : undefined,
+        height: metadata.height > maxHeight ? maxHeight : undefined,
+        fit: 'inside',
+        withoutEnlargement: true
+      };
+    }
+    
+    // Convert to WebP
+    const processedBuffer = await sharp(buffer)
+      .resize(resizeOptions)
+      .webp({ 
+        quality,
+        effort: 4
+      })
+      .toBuffer();
+    
+    const originalSize = (buffer.length / 1024).toFixed(1);
+    const processedSize = (processedBuffer.length / 1024).toFixed(1);
+    
+    console.log(`🖼️ Image optimized: ${originalSize}KB → ${processedSize}KB`);
+    
+    return processedBuffer;
+    
+  } catch (error) {
+    console.warn('⚠️ Image processing failed:', error.message);
+    throw error;
   }
 };
 
@@ -417,40 +653,40 @@ const validateUploadedFile = (file) => {
   return null; // No errors
 };
 
-// Helper function: Process and optimize image
-const processImage = async (buffer) => {
-  try {
-    const metadata = await sharp(buffer).metadata();
+// // Helper function: Process and optimize image
+// const processImage = async (buffer) => {
+//   try {
+//     const metadata = await sharp(buffer).metadata();
     
-    // Resize if too large
-    const maxWidth = 1920;
-    const maxHeight = 1080;
+//     // Resize if too large
+//     const maxWidth = 1920;
+//     const maxHeight = 1080;
     
-    let resizeOptions = {};
-    if (metadata.width > maxWidth || metadata.height > maxHeight) {
-      resizeOptions = {
-        width: metadata.width > maxWidth ? maxWidth : undefined,
-        height: metadata.height > maxHeight ? maxHeight : undefined,
-        fit: 'inside',
-        withoutEnlargement: true
-      };
-    }
+//     let resizeOptions = {};
+//     if (metadata.width > maxWidth || metadata.height > maxHeight) {
+//       resizeOptions = {
+//         width: metadata.width > maxWidth ? maxWidth : undefined,
+//         height: metadata.height > maxHeight ? maxHeight : undefined,
+//         fit: 'inside',
+//         withoutEnlargement: true
+//       };
+//     }
     
-    // Convert to WebP with quality 85
-    const processedBuffer = await sharp(buffer)
-      .resize(resizeOptions)
-      .webp({ 
-        quality: 85,
-        effort: 4 // Better compression
-      })
-      .toBuffer();
+//     // Convert to WebP with quality 85
+//     const processedBuffer = await sharp(buffer)
+//       .resize(resizeOptions)
+//       .webp({ 
+//         quality: 85,
+//         effort: 4 // Better compression
+//       })
+//       .toBuffer();
     
-    console.log(`🖼️ Image optimized: ${(buffer.length / 1024).toFixed(1)}KB → ${(processedBuffer.length / 1024).toFixed(1)}KB`);
+//     console.log(`🖼️ Image optimized: ${(buffer.length / 1024).toFixed(1)}KB → ${(processedBuffer.length / 1024).toFixed(1)}KB`);
     
-    return processedBuffer;
+//     return processedBuffer;
     
-  } catch (error) {
-    console.warn('⚠️ Image processing failed:', error.message);
-    throw error;
-  }
-};
+//   } catch (error) {
+//     console.warn('⚠️ Image processing failed:', error.message);
+//     throw error;
+//   }
+// };
