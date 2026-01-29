@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: latelia-api
+    env: node
+    region: singapore  # Chọn region gần Việt Nam
+    plan: pro
+    buildCommand: npm install --production
+    startCommand: node server.js
+    healthCheckPath: /health
+    healthCheckTimeout: 60
+    autoDeploy: true
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
+      - path: /*
+        name: Access-Control-Allow-Methods
+        value: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+      - path: /*
+        name: Access-Control-Allow-Headers
+        value: "Content-Type, Authorization, X-Requested-With"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=2048 --max-http-header-size=16384"
+    scaling:
+      minInstances: 1
+      maxInstances: 3
+      targetMemoryPercent: 70
+      targetCPUPercent: 70
+    resources:
+      memoryMB: 1024
+      cpuUnits: 512
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    advanced:
+      timeout: 180  # 3 phút timeout cho Render Pro
+      dockerCommand: null

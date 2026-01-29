@@ -634,7 +634,7 @@ export const uploadSingleImage = multer({
 export const uploadMultipleImages = multer({
   storage: memoryStorage,
   limits: {
-    fileSize: 20 * 1024 * 1024, // 10MB per file
+    fileSize: 10 * 1024 * 1024, // 10MB per file
     files: 20 // Max 20 files
   },
   fileFilter: (req, file, cb) => {
