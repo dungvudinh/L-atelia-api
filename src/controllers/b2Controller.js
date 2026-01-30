@@ -81,29 +81,26 @@ export const uploadFile = async (req, res) => {
 
     let originalBuffer = req.file.buffer;
     let thumbnailBuffer = null;
-    let originalContentType = req.file.mimetype;
     
     // Process image for both original and thumbnail
     if (req.file.mimetype.startsWith('image/')) {
       try {
         console.log('🖼️ Processing image optimization...');
         
-        // Process original image (optimize)
-        originalBuffer = await processImage(originalBuffer, {
-          maxWidth: 1920,
-          maxHeight: 1080,
-          format: 'webp',
-          quality: 85
-        });
-        originalContentType = 'image/webp';
+        // Process original image (optimize) - chuyển sang webp
+        const processedImage = await sharp(req.file.buffer)
+          .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+        
+        originalBuffer = processedImage;
         
         // Create thumbnail
         try {
-          thumbnailBuffer = await createThumbnail(req.file.buffer, {
-            width: THUMBNAIL_WIDTH,
-            height: THUMBNAIL_HEIGHT,
-            quality: THUMBNAIL_QUALITY
-          });
+          thumbnailBuffer = await sharp(req.file.buffer)
+            .resize(700, 500, { fit: 'cover' })
+            .webp({ quality: 100 })
+            .toBuffer();
           console.log('✅ Thumbnail created successfully');
         } catch (thumbError) {
           console.warn('⚠️ Thumbnail creation failed:', thumbError.message);
@@ -112,7 +109,15 @@ export const uploadFile = async (req, res) => {
         
       } catch (imageError) {
         console.warn('⚠️ Image processing failed, using original:', imageError.message);
-        // Continue with original file
+        // Continue with original file, nhưng vẫn cố gắng chuyển sang webp nếu có thể
+        try {
+          originalBuffer = await sharp(req.file.buffer)
+            .webp({ quality: 85 })
+            .toBuffer();
+        } catch (e) {
+          // Nếu lỗi thì giữ nguyên buffer gốc
+          originalBuffer = req.file.buffer;
+        }
       }
     }
 
@@ -121,11 +126,10 @@ export const uploadFile = async (req, res) => {
       Bucket: B2_BUCKET_NAME,
       Key: originalKey,
       Body: originalBuffer,
-      ContentType: originalContentType,
+      ContentType: 'image/webp', // Luôn dùng webp sau khi xử lý
       Metadata: {
         'original-filename': originalName,
         'upload-timestamp': timestamp.toString(),
-        'uploaded-by': req.user?._id || 'anonymous',
         'upload-method': 'backend-proxy',
         'optimized': 'true',
         'type': 'original'
@@ -153,7 +157,7 @@ export const uploadFile = async (req, res) => {
             'upload-timestamp': timestamp.toString(),
             'upload-method': 'backend-proxy',
             'type': 'thumbnail',
-            'dimensions': `${THUMBNAIL_WIDTH}x${THUMBNAIL_HEIGHT}`
+            'dimensions': '700x500'
           }
         };
         
@@ -181,12 +185,12 @@ export const uploadFile = async (req, res) => {
         originalName,
         size: originalBuffer.length,
         originalSize: req.file.size,
-        type: originalContentType,
+        type: 'image/webp',
         etag: originalResult.ETag,
         uploadedAt: new Date().toISOString(),
         optimized: true,
         hasThumbnail: !!thumbnailUrl,
-        thumbnailDimensions: thumbnailUrl ? `${THUMBNAIL_WIDTH}x${THUMBNAIL_HEIGHT}` : null
+        thumbnailDimensions: thumbnailUrl ? '700x500' : null
       },
       message: 'File uploaded successfully with thumbnail'
     });

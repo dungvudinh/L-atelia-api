@@ -614,7 +614,7 @@ const uploadProjectImagesArray = multer({
 export const uploadSingleImage = multer({
   storage: memoryStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 5 * 1024 * 1024, // 10MB
     files: 1
   },
   fileFilter: (req, file, cb) => {
@@ -634,8 +634,8 @@ export const uploadSingleImage = multer({
 export const uploadMultipleImages = multer({
   storage: memoryStorage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB per file
-    files: 20 // Max 20 files
+    fileSize: 5 * 1024 * 1024, // 10MB per file
+    files: 1 // Max 20 files
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
