@@ -215,38 +215,11 @@ export const uploadMultipleFiles = async (req, res) => {
       });
     }
 
-    console.log(`📦 Processing ${req.files.length} files...`);
-
-    // GIỚI HẠN SỐ LƯỢNG FILE
-    const MAX_FILES = 5; // Giảm xuống 5 file/lần
-    if (req.files.length > MAX_FILES) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: `Maximum ${MAX_FILES} files allowed per upload`
-      });
-    }
-
-    // GIỚI HẠN TỔNG KÍCH THƯỚC
-    const totalSize = req.files.reduce((sum, file) => sum + file.size, 0);
-    const MAX_TOTAL_SIZE = 15 * 1024 * 1024; // 15MB tổng
-    if (totalSize > MAX_TOTAL_SIZE) {
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: `Total size ${(totalSize / 1024 / 1024).toFixed(2)}MB exceeds limit of 15MB`
-      });
-    }
-
-    // XỬ LÝ TỪNG FILE MỘT (SEQUENTIAL) - QUAN TRỌNG
-    const uploadedFiles = [];
-    const errors = [];
-
-    for (let i = 0; i < req.files.length; i++) {
-      const file = req.files[i];
-      
+    console.log(`📦 Processing ${req.files.length} files for upload with thumbnails...`);
+    
+    const uploadPromises = req.files.map(async (file, index) => {
       try {
-        console.log(`🔄 Uploading ${i + 1}/${req.files.length}: ${file.originalname} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-        
-        // Tạo unique filename
+        // Generate unique filename
         const timestamp = Date.now();
         const randomString = crypto.randomBytes(4).toString('hex');
         const safeName = file.originalname
@@ -254,149 +227,140 @@ export const uploadMultipleFiles = async (req, res) => {
           .replace(/[^a-z0-9.]/g, '-')
           .replace(/-+/g, '-');
         
-        const uniqueFilename = `${timestamp}-${randomString}-${safeName}`;
+        const uniqueFilename = `${timestamp}-${index}-${randomString}-${safeName}`;
+        
+        // Original file key
         const originalKey = `${folder}/${uniqueFilename}`.replace(/\/\//g, '/');
         
-        // XỬ LÝ ẢNH VỚI MEMORY OPTIMIZATION
-        let processedBuffer;
+        // Thumbnail file key
+        const extension = safeName.split('.').pop();
+        const thumbnailName = uniqueFilename.replace(`.${extension}`, `-thumb.${extension}`);
+        const thumbnailKey = `${folder}/thumbnails/${thumbnailName}`.replace(/\/\//g, '/');
+
+        let originalBuffer = file.buffer;
         let thumbnailBuffer = null;
-        
+        let contentType = file.mimetype;
+
+        // Process image and create thumbnail
         if (file.mimetype.startsWith('image/')) {
           try {
-            // ƯU TIÊN: chỉ resize nếu ảnh quá lớn
-            const metadata = await sharp(file.buffer).metadata();
+            // Optimize original
+            originalBuffer = await processImage(file.buffer, {
+              maxWidth: 1920,
+              maxHeight: 1080,
+              format: 'webp',
+              quality: 85
+            });
+            contentType = 'image/webp';
             
-            if (metadata.width > 1920 || metadata.height > 1080 || file.size > 2 * 1024 * 1024) {
-              // Chỉ resize nếu cần
-              processedBuffer = await sharp(file.buffer)
-                .resize({
-                  width: metadata.width > 1920 ? 1920 : undefined,
-                  height: metadata.height > 1080 ? 1080 : undefined,
-                  fit: 'inside',
-                  withoutEnlargement: true
-                })
-                .webp({ quality: 80 })
-                .toBuffer();
-            } else {
-              // Giữ nguyên nếu ảnh nhỏ
-              processedBuffer = file.buffer;
-            }
-            
-            // Tạo thumbnail chỉ cho ảnh lớn
-            if (file.size > 500 * 1024) { // > 500KB
-              thumbnailBuffer = await sharp(file.buffer)
-                .resize(700, 500, { fit: 'cover' })
-                .webp({ quality: 70 })
-                .toBuffer();
-            }
-            
-          } catch (imageError) {
-            console.warn(`⚠️ Image processing failed, using original:`, imageError.message);
-            processedBuffer = file.buffer;
+            // Create thumbnail
+            thumbnailBuffer = await createThumbnail(file.buffer, {
+              width: THUMBNAIL_WIDTH,
+              height: THUMBNAIL_HEIGHT,
+              quality: THUMBNAIL_QUALITY
+            });
+          } catch (imgError) {
+            console.warn(`⚠️ Image processing failed for ${file.originalname}:`, imgError.message);
+            // Continue with original
           }
-        } else {
-          processedBuffer = file.buffer;
         }
 
-        // UPLOAD ORIGINAL
-        const originalParams = {
+        // Upload original
+        const originalCommand = new PutObjectCommand({
           Bucket: B2_BUCKET_NAME,
           Key: originalKey,
-          Body: processedBuffer,
-          ContentType: file.mimetype.startsWith('image/') ? 'image/webp' : file.mimetype,
+          Body: originalBuffer,
+          ContentType: contentType,
           Metadata: {
             'original-filename': file.originalname,
-            'upload-index': i.toString(),
-            'total-files': req.files.length.toString()
+            'upload-timestamp': timestamp.toString()
+          }
+        });
+
+        await s3Client.send(originalCommand);
+        
+        const originalUrl = `${B2_PUBLIC_URL}/${originalKey}`;
+        let thumbnailUrl = null;
+        
+        // Upload thumbnail if created
+        if (thumbnailBuffer) {
+          try {
+            const thumbnailCommand = new PutObjectCommand({
+              Bucket: B2_BUCKET_NAME,
+              Key: thumbnailKey,
+              Body: thumbnailBuffer,
+              ContentType: 'image/webp',
+              Metadata: {
+                'original-filename': file.originalname,
+                'upload-timestamp': timestamp.toString(),
+                'type': 'thumbnail'
+              }
+            });
+            
+            await s3Client.send(thumbnailCommand);
+            thumbnailUrl = `${B2_PUBLIC_URL}/${thumbnailKey}`;
+            
+          } catch (thumbUploadError) {
+            console.warn(`⚠️ Thumbnail upload failed for ${file.originalname}:`, thumbUploadError.message);
+          }
+        }
+        
+        return {
+          success: true,
+          data: {
+            url: originalUrl,
+            thumbnailUrl: thumbnailUrl, // ✅ Có thumbnailUrl
+            key: originalKey,
+            thumbnailKey: thumbnailUrl ? thumbnailKey : null, // ✅ Có thumbnailKey (nếu có thumbnail)
+            filename: uniqueFilename,
+            originalName: file.originalname,
+            size: originalBuffer.length,
+            thumbnailSize: thumbnailBuffer ? thumbnailBuffer.length : 0, // ✅ Có thumbnailSize
+            type: contentType,
+            hasThumbnail: !!thumbnailUrl, // ✅ Có flag hasThumbnail
+            dimensions: { width: 0, height: 0 }, // Placeholder, có thể tính từ sharp metadata
+            thumbnailDimensions: thumbnailUrl ? { 
+              width: THUMBNAIL_WIDTH, 
+              height: THUMBNAIL_HEIGHT 
+            } : null
           }
         };
-
-        await s3Client.send(new PutObjectCommand(originalParams));
-        const originalUrl = `${B2_PUBLIC_URL}/${originalKey}`;
-        
-        // UPLOAD THUMBNAIL (nếu có)
-        let thumbnailUrl = null;
-        let thumbnailKey = null;
-        
-        if (thumbnailBuffer) {
-          const thumbnailKey = `${folder}/thumbnails/${uniqueFilename.replace(/\.[^/.]+$/, "")}-thumb.webp`;
-          const thumbnailParams = {
-            Bucket: B2_BUCKET_NAME,
-            Key: thumbnailKey,
-            Body: thumbnailBuffer,
-            ContentType: 'image/webp'
-          };
-          
-          await s3Client.send(new PutObjectCommand(thumbnailParams));
-          thumbnailUrl = `${B2_PUBLIC_URL}/${thumbnailKey}`;
-        }
-
-        // GIẢI PHÓNG MEMORY
-        file.buffer = null;
-        processedBuffer = null;
-        thumbnailBuffer = null;
-        
-        // Thu thập kết quả
-        uploadedFiles.push({
-          url: originalUrl,
-          thumbnailUrl,
-          key: originalKey,
-          thumbnailKey,
-          filename: uniqueFilename,
-          originalName: file.originalname,
-          size: file.size,
-          thumbnailSize: thumbnailBuffer ? thumbnailBuffer.length : 0,
-          hasThumbnail: !!thumbnailUrl
-        });
-        
-        console.log(`✅ Uploaded ${i + 1}/${req.files.length}`);
-        
-        // NGHỈ NGẮN GIỮA CÁC FILE ĐỂ TRÁNH OVERLOAD
-        if (i < req.files.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
         
       } catch (fileError) {
-        console.error(`❌ Failed to upload ${file.originalname}:`, fileError.message);
-        errors.push({
+        console.error(`❌ Failed to upload ${file.originalname}:`, fileError);
+        return {
+          success: false,
           filename: file.originalname,
           error: fileError.message
-        });
-        
-        // Nếu lỗi nặng, dừng lại
-        if (fileError.message.includes('memory') || fileError.message.includes('timeout')) {
-          break;
-        }
+        };
       }
-    }
+    });
 
-    // TRẢ KẾT QUẢ
+    const results = await Promise.all(uploadPromises);
+    
+    const successfulUploads = results.filter(r => r.success);
+    const failedUploads = results.filter(r => !r.success);
+
     res.status(StatusCodes.OK).json({
       success: true,
       data: {
         total: req.files.length,
-        successful: uploadedFiles.length,
-        failed: errors.length,
-        files: uploadedFiles,
-        errors: errors
+        successful: successfulUploads.length,
+        failed: failedUploads.length,
+        files: successfulUploads.map(r => r.data),
+        errors: failedUploads.map(r => ({
+          filename: r.filename,
+          error: r.error
+        }))
       },
-      message: `Uploaded ${uploadedFiles.length}/${req.files.length} files`
+      message: `Uploaded ${successfulUploads.length}/${req.files.length} files with thumbnails`
     });
 
   } catch (error) {
-    console.error('❌ Multiple upload error:', error.message);
-    
-    // XỬ LÝ LỖI ĐẶC BIỆT
-    if (error.message.includes('timeout')) {
-      return res.status(StatusCodes.REQUEST_TIMEOUT).json({
-        success: false,
-        message: 'Upload timeout. Please upload fewer files or smaller files.'
-      });
-    }
-    
+    console.error('❌ Multiple upload error:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Upload failed',
+      message: 'Multiple upload failed',
       error: error.message
     });
   }
