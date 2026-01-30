@@ -88,12 +88,12 @@ export const uploadFile = async (req, res) => {
         console.log('🖼️ Processing image optimization...');
         
         // Process original image (optimize) - chuyển sang webp
-        const processedImage = await sharp(req.file.buffer)
-          .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 85 })
-          .toBuffer();
+        // const processedImage = await sharp(req.file.buffer)
+        //   .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
+        //   .webp({ quality: 85 })
+        //   .toBuffer();
         
-        originalBuffer = processedImage;
+        originalBuffer = req.file.buffer;
         
         // Create thumbnail
         try {
