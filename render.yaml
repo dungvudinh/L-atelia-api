@@ -1,41 +1,32 @@
 services:
   - type: web
-    name: latelia-api
+    name: l-atelia-api
     env: node
-    region: singapore  # Chọn region gần Việt Nam
-    plan: pro
-    buildCommand: npm install --production
-    startCommand: node server.js
+    buildCommand: npm install
+    startCommand: npm start
     healthCheckPath: /health
-    healthCheckTimeout: 60
     autoDeploy: true
-    headers:
-      - path: /*
-        name: Access-Control-Allow-Origin
-        value: "*"
-      - path: /*
-        name: Access-Control-Allow-Methods
-        value: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-      - path: /*
-        name: Access-Control-Allow-Headers
-        value: "Content-Type, Authorization, X-Requested-With"
+    
+    # QUAN TRỌNG: Cấu hình cho file upload
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_OPTIONS
-        value: "--max-old-space-size=2048 --max-http-header-size=16384"
+        value: "--max-old-space-size=4096"  # Tăng memory limit
+      - key: BODY_SIZE_LIMIT
+        value: "50mb"
+    
+    # Plan configuration
+    plan: professional
+    instanceType: standard  # hoặc performance nếu cần
+    
+    # Tăng timeout cho upload
+    timeout:
+      maxRequestDuration: 300  # 5 phút
+    
+    # Scaling (nếu cần)
     scaling:
       minInstances: 1
-      maxInstances: 3
+      maxInstances: 2
       targetMemoryPercent: 70
       targetCPUPercent: 70
-    resources:
-      memoryMB: 1024
-      cpuUnits: 512
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
-    advanced:
-      timeout: 180  # 3 phút timeout cho Render Pro
-      dockerCommand: null

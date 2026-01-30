@@ -77,7 +77,13 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   const method = req.method;
   const path = req.path;
+  const memoryUsage = process.memoryUsage();
+  const usedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024 * 100) / 100;
+  const totalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024 * 100) / 100;
   
+  if (usedMB > 300) { // Nếu sử dụng > 300MB
+    console.warn(`⚠️ Memory high: ${usedMB}MB/${totalMB}MB`);
+  }
   console.log(`🌐 ${method} ${path} from ${origin || 'no-origin'}`);
   
   // Log headers cho OPTIONS requests để debug
