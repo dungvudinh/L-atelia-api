@@ -58,56 +58,19 @@ export const getRentalById = async (req, res) => {
 
 export const createRental = async (req, res) => {
   try {
-    let rentalData = req.body;
+    const rentalData = req.body;
     
-    // Parse JSON data nếu có
-    if (req.body.data) {
-      try {
-        rentalData = JSON.parse(req.body.data);
-      } catch (parseError) {
-        console.error('Error parsing JSON data:', parseError);
-      }
+    // ✅ Ensure featuredImage has isFeatured = true
+    if (rentalData.featuredImage && typeof rentalData.featuredImage === 'object') {
+      rentalData.featuredImage.isFeatured = true;
     }
     
-    // Parse array fields từ string sang array
-    if (rentalData.beds && !rentalData.adultBeds) {
-      rentalData.adultBeds = rentalData.beds;
-      delete rentalData.beds;
-    }
-    
-    if (rentalData.highlights && typeof rentalData.highlights === 'string') {
-      rentalData.highlights = JSON.parse(rentalData.highlights);
-    }
-    
-    if (rentalData.amenities && typeof rentalData.amenities === 'string') {
-      rentalData.amenities = JSON.parse(rentalData.amenities);
-    }
-    
-    if (rentalData.gallery && typeof rentalData.gallery === 'string') {
-      rentalData.gallery = JSON.parse(rentalData.gallery);
-    }
-    
-    // Xử lý gallery images từ B2 nếu có
-    if (req.b2Files && req.b2Files.length > 0) {
-      const uploadedImages = req.b2Files.map((b2File) => ({
-        id: Date.now() + Math.random(),
-        url: b2File.url,
-        key: b2File.key,
-        filename: b2File.filename,
-        name: b2File.originalname || b2File.filename,
-        size: b2File.size,
-        isFeatured: false,
-        uploadedAt: new Date(),
-        storage: 'b2'
+    // ✅ Ensure gallery images have correct isFeatured
+    if (rentalData.gallery && Array.isArray(rentalData.gallery)) {
+      rentalData.gallery = rentalData.gallery.map(img => ({
+        ...img,
+        isFeatured: (rentalData.featuredImage && img.id === rentalData.featuredImage.id) || false
       }));
-      
-      rentalData.gallery = [...(rentalData.gallery || []), ...uploadedImages];
-      
-      // Nếu có images, set featured image đầu tiên
-      if (uploadedImages.length > 0 && !rentalData.featuredImage) {
-        rentalData.featuredImage = uploadedImages[0].url;
-        uploadedImages[0].isFeatured = true;
-      }
     }
     
     const newRental = await rentService.createRental(rentalData);
@@ -129,50 +92,18 @@ export const createRental = async (req, res) => {
 export const updateRental = async (req, res) => {
   try {
     const { id } = req.params;
-    let rentalData = req.body;
+    const rentalData = req.body;
     
-    // Parse JSON data nếu có
-    if (req.body.data) {
-      try {
-        rentalData = JSON.parse(req.body.data);
-      } catch (parseError) {
-        console.error('Error parsing JSON data:', parseError);
-      }
+    // ✅ Same logic for update
+    if (rentalData.featuredImage && typeof rentalData.featuredImage === 'object') {
+      rentalData.featuredImage.isFeatured = true;
     }
     
-    if (rentalData.beds && !rentalData.adultBeds) {
-      rentalData.adultBeds = rentalData.beds;
-      delete rentalData.beds;
-    }
-    
-    // Parse array fields từ string sang array
-    if (rentalData.highlights && typeof rentalData.highlights === 'string') {
-      rentalData.highlights = JSON.parse(rentalData.highlights);
-    }
-    
-    if (rentalData.amenities && typeof rentalData.amenities === 'string') {
-      rentalData.amenities = JSON.parse(rentalData.amenities);
-    }
-    
-    if (rentalData.gallery && typeof rentalData.gallery === 'string') {
-      rentalData.gallery = JSON.parse(rentalData.gallery);
-    }
-    
-    // Xử lý gallery images mới từ B2 nếu có
-    if (req.b2Files && req.b2Files.length > 0) {
-      const uploadedImages = req.b2Files.map((b2File) => ({
-        id: Date.now() + Math.random(),
-        url: b2File.url,
-        key: b2File.key,
-        filename: b2File.filename,
-        name: b2File.originalname || b2File.filename,
-        size: b2File.size,
-        isFeatured: false,
-        uploadedAt: new Date(),
-        storage: 'b2'
+    if (rentalData.gallery && Array.isArray(rentalData.gallery)) {
+      rentalData.gallery = rentalData.gallery.map(img => ({
+        ...img,
+        isFeatured: (rentalData.featuredImage && img.id === rentalData.featuredImage.id) || false
       }));
-      
-      rentalData.newGalleryImages = uploadedImages;
     }
     
     const updatedRental = await rentService.updateRental(id, rentalData);
