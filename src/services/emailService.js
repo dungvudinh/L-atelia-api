@@ -93,124 +93,174 @@ class EmailService {
 
   // Generate confirmation email template
   generateConfirmationEmail(booking, property, nights, totalAmount) {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-          .content { background: #f9fafb; padding: 20px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
-          .highlight { color: #2563eb; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Booking Confirmed!</h1>
-            <p>Your reservation has been confirmed</p>
-          </div>
-          
-          <div class="content">
-            <div class="booking-details">
-              <h2>Booking Details</h2>
-              <p><strong>Booking Number:</strong> <span class="highlight">${booking.bookingNumber}</span></p>
-              <p><strong>Property:</strong> ${property.title}</p>
-              <p><strong>Location:</strong> ${property.location}</p>
-              <p><strong>Check-in:</strong> ${new Date(booking.checkIn).toLocaleDateString()}</p>
-              <p><strong>Check-out:</strong> ${new Date(booking.checkOut).toLocaleDateString()}</p>
-              <p><strong>Nights:</strong> ${nights}</p>
-              <p><strong>Guests:</strong> ${booking.adults} adults, ${booking.children} children</p>
-              <p><strong>Total Amount:</strong> $${totalAmount}</p>
-              
-              ${booking.specialRequests ? `
-                <p><strong>Special Requests:</strong> ${booking.specialRequests}</p>
-              ` : ''}
-            </div>
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #2f5855; color: white; padding: 20px; text-align: center; }
+        .content { background: #f9fafb; padding: 20px; }
+        .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        .highlight { color: #2f5855; font-weight: bold; }
+        .contact-info { 
+          background: white; 
+          padding: 20px; 
+          border-radius: 8px; 
+          margin: 20px 0;
+          border-left: 4px solid #2f5855;
+        }
+        .contact-item { margin: 10px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Xác nhận đặt phòng!</h1>
+          <p>Phòng của bạn đã được đặt thành công</p>
+        </div>
+        
+        <div class="content">
+          <div class="booking-details">
+            <h2>Thông tin đặt phòng</h2>
+            <p><strong>Mã đặt phòng:</strong> <span class="highlight">${booking.bookingNumber}</span></p>
+            <p><strong>Tài sản:</strong> ${property.title}</p>
+            <p><strong>Địa điểm:</strong> ${property.location}</p>
+            <p><strong>Ngày nhận phòng:</strong> ${new Date(booking.checkIn).toLocaleDateString()}</p>
+            <p><strong>Ngày trả phòng:</strong> ${new Date(booking.checkOut).toLocaleDateString()}</p>
+            <p><strong>Số đêm:</strong> ${nights}</p>
+            <p><strong>Số khách:</strong> ${booking.adults} người lớn, ${booking.children} trẻ em</p>
+            <p><strong>Tổng số tiền:</strong> $${totalAmount}</p>
             
-            <div style="text-align: center; margin: 30px 0;">
-              <p>Thank you for your booking! We're looking forward to hosting you.</p>
-              <p>If you have any questions, please don't hesitate to contact us.</p>
+            ${booking.specialRequests ? `
+              <p><strong>Yêu cầu đặc biệt:</strong> ${booking.specialRequests}</p>
+            ` : ''}
+          </div>
+          
+          <div class="contact-info">
+            <h3>Thông tin liên hệ</h3>
+            <div class="contact-item">
+              <strong>📞 Hotline:</strong> <span class="highlight">+84 096 428 2298</span>
+            </div>
+            <div class="contact-item">
+              <strong>👨‍💼 Người phụ trách:</strong> Mr Tùng - Phụ trách Kinh doanh
+            </div>
+            <div class="contact-item">
+              <strong>⏰ Giờ làm việc:</strong>
+              <ul style="margin: 5px 0 0 20px;">
+                <li>Thứ 2 - Thứ 6: 10:00-14:00 & 16:00-20:00</li>
+                <li>Thứ 7 - Chủ nhật: Chỉ dành cho hẹn trước</li>
+              </ul>
             </div>
           </div>
           
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${env.COMPANY_NAME || 'Booking System'}. All rights reserved.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <p>Đặt phòng của bạn đã được xác nhận! Chúng tôi mong chờ được đón tiếp bạn.</p>
+            <p>Nếu có bất kỳ câu hỏi nào, vui lòng liên hệ với chúng tôi qua thông tin trên.</p>
           </div>
         </div>
-      </body>
-      </html>
-    `;
-  }
+        
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${env.COMPANY_NAME || 'Booking System'}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
 
   // Generate update email template
   generateUpdateEmail(booking, property, nights, totalAmount, changes) {
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #f59e0b; color: white; padding: 20px; text-align: center; }
-          .content { background: #f9fafb; padding: 20px; }
-          .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
-          .changes { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; }
-          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
-          .highlight { color: #2563eb; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Booking Updated</h1>
-            <p>Your reservation has been updated</p>
-          </div>
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #f59e0b; color: white; padding: 20px; text-align: center; }
+        .content { background: #f9fafb; padding: 20px; }
+        .booking-details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .changes { background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
+        .highlight { color: #2563eb; font-weight: bold; }
+        .contact-info { 
+          background: white; 
+          padding: 20px; 
+          border-radius: 8px; 
+          margin: 20px 0;
+          border-left: 4px solid #f59e0b;
+        }
+        .contact-item { margin: 10px 0; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Cập nhật đặt phòng</h1>
+          <p>Đặt phòng của bạn đã được cập nhật</p>
+        </div>
+        
+        <div class="content">
+          ${changes.length > 0 ? `
+            <div class="changes">
+              <h3>Thay đổi đã thực hiện:</h3>
+              <ul>
+                ${changes.map(change => `<li>${change}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
           
-          <div class="content">
-            ${changes.length > 0 ? `
-              <div class="changes">
-                <h3>Changes Made:</h3>
-                <ul>
-                  ${changes.map(change => `<li>${change}</li>`).join('')}
-                </ul>
-              </div>
+          <div class="booking-details">
+            <h2>Thông tin đặt phòng đã cập nhật</h2>
+            <p><strong>Mã đặt phòng:</strong> <span class="highlight">${booking.bookingNumber}</span></p>
+            <p><strong>Tài sản:</strong> ${property.title}</p>
+            <p><strong>Địa điểm:</strong> ${property.location}</p>
+            <p><strong>Ngày nhận phòng:</strong> ${new Date(booking.checkIn).toLocaleDateString()}</p>
+            <p><strong>Ngày trả phòng:</strong> ${new Date(booking.checkOut).toLocaleDateString()}</p>
+            <p><strong>Số đêm:</strong> ${nights}</p>
+            <p><strong>Số khách:</strong> ${booking.adults} người lớn, ${booking.children} trẻ em</p>
+            <p><strong>Tổng số tiền:</strong> $${totalAmount}</p>
+            <p><strong>Trạng thái:</strong> ${booking.status}</p>
+            
+            ${booking.specialRequests ? `
+              <p><strong>Yêu cầu đặc biệt:</strong> ${booking.specialRequests}</p>
             ` : ''}
-            
-            <div class="booking-details">
-              <h2>Updated Booking Details</h2>
-              <p><strong>Booking Number:</strong> <span class="highlight">${booking.bookingNumber}</span></p>
-              <p><strong>Property:</strong> ${property.title}</p>
-              <p><strong>Location:</strong> ${property.location}</p>
-              <p><strong>Check-in:</strong> ${new Date(booking.checkIn).toLocaleDateString()}</p>
-              <p><strong>Check-out:</strong> ${new Date(booking.checkOut).toLocaleDateString()}</p>
-              <p><strong>Nights:</strong> ${nights}</p>
-              <p><strong>Guests:</strong> ${booking.adults} adults, ${booking.children} children</p>
-              <p><strong>Total Amount:</strong> $${totalAmount}</p>
-              <p><strong>Status:</strong> ${booking.status}</p>
-              
-              ${booking.specialRequests ? `
-                <p><strong>Special Requests:</strong> ${booking.specialRequests}</p>
-              ` : ''}
+          </div>
+          
+          <div class="contact-info">
+            <h3>Thông tin liên hệ</h3>
+            <div class="contact-item">
+              <strong>📞 Hotline:</strong> <span class="highlight">+84 096 428 2298</span>
             </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <p>Your booking has been successfully updated.</p>
-              <p>If you have any questions about these changes, please contact us.</p>
+            <div class="contact-item">
+              <strong>👨‍💼 Người phụ trách:</strong> Mr Tùng - Phụ trách Kinh doanh
+            </div>
+            <div class="contact-item">
+              <strong>⏰ Giờ làm việc:</strong>
+              <ul style="margin: 5px 0 0 20px;">
+                <li>Thứ 2 - Thứ 6: 10:00-14:00 & 16:00-20:00</li>
+                <li>Thứ 7 - Chủ nhật: Chỉ dành cho hẹn trước</li>
+              </ul>
             </div>
           </div>
           
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${env.COMPANY_NAME || 'Booking System'}. All rights reserved.</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <p>Đặt phòng của bạn đã được cập nhật thành công.</p>
+            <p>Nếu bạn có bất kỳ câu hỏi nào về những thay đổi này, vui lòng liên hệ với chúng tôi qua thông tin trên.</p>
           </div>
         </div>
-      </body>
-      </html>
-    `;
-  }
+        
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} ${env.COMPANY_NAME || 'Booking System'}. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
 
   // Generate cancellation email template
   generateCancellationEmail(booking, property) {
