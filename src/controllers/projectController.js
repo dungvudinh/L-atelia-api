@@ -75,6 +75,7 @@ export const getProjects = async (req, res, next) => {
       location: 1,
       status: 1,
       createdAt: 1,
+      propertyFeatures:1,
       'heroImage.key': 1,
       'heroImage.thumbnailKey': 1,
       'heroImage.thumbnailSize': 1,
