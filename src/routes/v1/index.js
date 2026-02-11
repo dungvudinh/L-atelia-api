@@ -10,6 +10,7 @@ import rolePermissionRoute from './rolePermissionRoute.js'
 import bookingNotificationRoute from './bookingNotificationRoute.js'
 import contactRoute from './contactRoute.js'
 import b2Route from './b2Route.js';
+import newsletterRoute from './newsletterRoute.js';
 // const express = require('express');
 // const projectRoute = require('./projectRoute.js');
 const Router = express.Router();
@@ -24,4 +25,5 @@ Router.use('/role-permissions', rolePermissionRoute)
 Router.use('/notifications', bookingNotificationRoute)
 Router.use('/contact', contactRoute)
 Router.use('/b2', b2Route);
+Router.use('/newsletter', newsletterRoute);
 export default Router;
