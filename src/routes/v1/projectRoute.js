@@ -8,7 +8,7 @@ import {
     remove,
     deleteImages,
     createProject,
-    submitProjectContactForm
+    submitProjectContactForm 
 } from "../../controllers/projectController.js";
 
 const Router = express.Router({mergeParams:true});
@@ -22,7 +22,7 @@ Router.post('/', createProject);
 Router.put('/:id', update);
 Router.delete('/:id', remove);
 Router.post('/:id/images/delete', deleteImages);
-Router.post('/:projectId/contact', submitProjectContactForm);
+Router.post('/:projectId/contact', submitProjectContactForm); // Thêm route mới
 // ========== XÓA CÁC ROUTE UPLOAD ==========
 // Router.post('/:id/upload/image', ...); // XÓA
 // Router.post('/:id/upload/images', ...); // XÓA
