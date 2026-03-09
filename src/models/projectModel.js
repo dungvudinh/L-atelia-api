@@ -23,7 +23,7 @@ const projectSchema = new mongoose.Schema({
     default: 'sale'
   },
   location: String,
-  
+  price:String,
   // Images - LƯU CẢ ORIGINAL VÀ THUMBNAIL
   heroImage: imageSchema,
   gallery: [imageSchema],

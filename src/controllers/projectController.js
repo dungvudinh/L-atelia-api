@@ -73,6 +73,7 @@ export const getProjects = async (req, res, next) => {
     const projection = {
       title: 1,
       location: 1,
+      price:1,
       status: 1,
       createdAt: 1,
       propertyFeatures:1,
@@ -141,16 +142,11 @@ export const getProjectBySlug = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
   try {
-    console.log('=== SERVER: UPDATE PROJECT WITH THUMBNAILS ===');
     const { id } = req.params;
     
     const updateData = req.body;
     
-    console.log('Update data with thumbnails:', {
-      title: updateData.title,
-      heroImageHasThumbnail: updateData.heroImage?.thumbnailUrl ? 'Yes' : 'No',
-      galleryThumbnails: updateData.gallery?.filter(img => img.thumbnailUrl)?.length || 0
-    });
+    console.log(updateData)
     
     const currentDate = new Date();
     
@@ -160,6 +156,7 @@ export const update = async (req, res, next) => {
       title: updateData.title,
       description: updateData.description,
       status: updateData.status,
+      price:updateData.price,
       location: updateData.location,
       propertyFeatures: updateData.propertyFeatures || [],
       specifications: updateData.specifications || [],
@@ -174,13 +171,6 @@ export const update = async (req, res, next) => {
       brochure: normalizeImageArrayWithThumbnail(updateData.brochure)
     };
     
-    console.log('Final update data with thumbnails:', {
-      gallery: normalizedUpdateData.gallery.length,
-      galleryThumbnails: normalizedUpdateData.gallery.filter(img => img.hasThumbnail).length,
-      constructionProgress: normalizedUpdateData.constructionProgress.length,
-      constructionThumbnails: normalizedUpdateData.constructionProgress.filter(img => img.hasThumbnail).length,
-      heroImage: normalizedUpdateData.heroImage ? (normalizedUpdateData.heroImage.hasThumbnail ? 'Has thumbnail' : 'No') : 'No'
-    });
     
     const project = await projectService.updateProjectService(id, normalizedUpdateData);
     
