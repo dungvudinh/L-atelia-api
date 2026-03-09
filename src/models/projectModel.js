@@ -19,8 +19,8 @@ const projectSchema = new mongoose.Schema({
   description: { type: String, required: true },
   status: {
     type: String,
-    enum: ['draft', 'published', 'archived'],
-    default: 'draft'
+    enum: ['sale', 'rent'],
+    default: 'sale'
   },
   location: String,
   
