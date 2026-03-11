@@ -120,7 +120,7 @@ export const updateProjectService = async (id, projectData) => {
 
     // Update basic fields
     const basicFields = [
-      'title', 'description', 'status', 'location','price',
+      'title', 'description', 'status', 'location','price','type', 
       'propertyFeatures', 'specifications', 
       'propertyHighlights', 'specialSections'
     ];

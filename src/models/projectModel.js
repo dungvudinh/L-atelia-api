@@ -19,11 +19,16 @@ const projectSchema = new mongoose.Schema({
   description: { type: String, required: true },
   status: {
     type: String,
-    enum: ['sale', 'rent'],
-    default: 'sale'
+    enum: ['available', 'sold'],
+    default: 'available'
   },
   location: String,
   price:String,
+  type: {
+    type: String,
+    enum: ['sale', 'rent'],
+    default: 'sale'
+  },
   // Images - LƯU CẢ ORIGINAL VÀ THUMBNAIL
   heroImage: imageSchema,
   gallery: [imageSchema],
