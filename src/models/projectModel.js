@@ -1,4 +1,5 @@
 // models/projectModel.js
+import { text } from 'express';
 import mongoose from 'mongoose';
 
 // Schema với thumbnail support
@@ -14,6 +15,10 @@ const imageSchema = new mongoose.Schema({
   hasThumbnail: { type: Boolean, default: false }
 }, { _id: true });
 
+const youtubeLinkSchema = new mongoose.Schema({
+  id: { type: String, required: true },
+  url: { type: String, required: true }
+}, { _id: false });
 const projectSchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String, required: true },
@@ -28,6 +33,10 @@ const projectSchema = new mongoose.Schema({
     type: String,
     enum: ['sale', 'rent'],
     default: 'sale'
+  },
+  youtubeLinks: { 
+    type: [youtubeLinkSchema], 
+    default: [] 
   },
   // Images - LƯU CẢ ORIGINAL VÀ THUMBNAIL
   heroImage: imageSchema,

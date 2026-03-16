@@ -30,7 +30,8 @@ export const createProject = async (req, res, next) => {
       specifications: projectData.specifications || [],
       propertyHighlights: projectData.propertyHighlights || [],
       specialSections: projectData.specialSections || [],
-      
+      youtubeLinks: normalizeYouTubeLinks(projectData.youtubeLinks),
+
       // Chuẩn hóa các trường ảnh với thumbnail
       heroImage: normalizeImageWithThumbnail(projectData.heroImage),
       gallery: normalizeImageArrayWithThumbnail(projectData.gallery),
@@ -45,7 +46,8 @@ export const createProject = async (req, res, next) => {
     console.log('Normalized project with thumbnails:', {
       heroImage: projectToCreate.heroImage ? (projectToCreate.heroImage.hasThumbnail ? 'Has thumbnail' : 'No thumbnail') : 'No',
       gallery: projectToCreate.gallery.length,
-      galleryThumbnails: projectToCreate.gallery.filter(img => img.hasThumbnail).length
+      galleryThumbnails: projectToCreate.gallery.filter(img => img.hasThumbnail).length,
+       youtubeLinks: projectToCreate.youtubeLinks.length // Thêm log youtubeLinks
     });
     
     const project = await projectService.createProjectService(projectToCreate);
@@ -88,7 +90,8 @@ export const getProjects = async (req, res, next) => {
       'gallery.thumbnailSize': 1,
       'gallery.size': 1,
       'gallery.hasThumbnail': 1, 
-      location:1
+      location:1,
+      youtubeLinks: 1
     };
     
     const result = await projectService.getProjectsService(filters, projection);
@@ -117,7 +120,8 @@ export const getProjectById = async (req, res, next) => {
       title: project.title,
       heroImageHasThumbnail: project.heroImage?.hasThumbnail || false,
       galleryThumbnails: project.gallery?.filter(img => img.hasThumbnail).length || 0,
-      totalGallery: project.gallery?.length || 0
+      totalGallery: project.gallery?.length || 0,
+       youtubeLinksCount: project.youtubeLinks?.length || 0 // Thêm log youtubeLinks
     });
     
     res.status(StatusCodes.OK).json({
@@ -164,7 +168,7 @@ export const update = async (req, res, next) => {
       specifications: updateData.specifications || [],
       propertyHighlights: updateData.propertyHighlights || [],
       specialSections: updateData.specialSections || [],
-      
+       youtubeLinks: normalizeYouTubeLinks(updateData.youtubeLinks),
       // Chuẩn hóa các trường ảnh với thumbnail
       heroImage: normalizeImageWithThumbnail(updateData.heroImage),
       gallery: normalizeImageArrayWithThumbnail(updateData.gallery),
@@ -257,6 +261,16 @@ const normalizeImageWithThumbnail = (imgData) => {
 const normalizeImageArrayWithThumbnail = (array) => {
   if (!array || !Array.isArray(array)) return [];
   return array.map(normalizeImageWithThumbnail).filter(img => img !== null);
+};
+const normalizeYouTubeLinks = (links) => {
+  if (!links || !Array.isArray(links)) return [];
+  
+  return links
+    .filter(link => link && link.url && link.url.trim() !== '')
+    .map(link => ({
+      id: link.id || `youtube-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      url: link.url.trim()
+    }));
 };
 export const submitProjectContactForm = async (req, res) => {
   try {

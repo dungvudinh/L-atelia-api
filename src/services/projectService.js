@@ -14,7 +14,7 @@ export const createProjectService = async (projectData) => {
       specifications: projectData.specifications || [],
       propertyHighlights: projectData.propertyHighlights || [],
       specialSections: projectData.specialSections || [],
-      
+       youtubeLinks: projectData.youtubeLinks || [],
       // Ảnh đã được xử lý ở controller
       heroImage: projectData.heroImage || null,
       gallery: projectData.gallery || [],
@@ -122,7 +122,7 @@ export const updateProjectService = async (id, projectData) => {
     const basicFields = [
       'title', 'description', 'status', 'location','price','type', 
       'propertyFeatures', 'specifications', 
-      'propertyHighlights', 'specialSections'
+      'propertyHighlights', 'specialSections','youtubeLinks'
     ];
     
     basicFields.forEach(field => {
