@@ -84,10 +84,16 @@ const rentSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Location cannot exceed 500 characters']
   },
+  googleAddress: {
+    type: String,
+    required: [true, 'Google Address is required'],
+    trim: true,
+    // maxlength: [500, 'Google Address cannot exceed 500 characters']
+  },
   price: {
-    type: Number,
+    type: String,
     required: [true, 'Price is required'],
-    min: [0, 'Price cannot be negative']
+    // min: [0, 'Price cannot be negative']
   },
   priceUnit: {
     type: String,
@@ -129,8 +135,8 @@ const rentSchema = new mongoose.Schema({
   },
   highlights: [highlightSchema],
   amenities: [{
-    type: String,
-    trim: true
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Amenity'
   }],
   gallery: [galleryImageSchema],
   featuredImage: galleryImageSchema,

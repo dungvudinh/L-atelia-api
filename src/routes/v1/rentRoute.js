@@ -12,38 +12,33 @@ import {
   updateRentalStatus,
   toggleFeatured
 } from '../../controllers/rentController.js';
+import{   // Import amenity controllers
+  getAllAmenities,
+  getAmenityById,
+  createAmenity,
+  updateAmenity,
+  deleteAmenity
+} from '../../controllers/amenityController.js'; // Import amenity controllers
 import { uploadRentArray, handleMulterError } from '../../config/b2.js'; // Sử dụng từ b2.js
 
 const router = express.Router();
 
-// GET ALL RENTALS
+// === Amenity routes (đặt trước) ===
+router.get('/amenities', getAllAmenities);
+router.get('/amenities/:id', getAmenityById);
+router.post('/amenities', createAmenity);
+router.put('/amenities/:id', updateAmenity);
+router.delete('/amenities/:id', deleteAmenity);
+
+// === Rental routes ===
 router.get('/', getAllRentals);
-
-// GET RENTAL BY ID
 router.get('/:id', getRentalById);
-
-// CREATE NEW RENTAL - thêm upload middleware
-router.post('/',createRental);
-
-// UPDATE RENTAL - thêm upload middleware
+router.post('/', createRental);
 router.put('/:id', updateRental);
-
-// DELETE RENTAL
 router.delete('/:id', deleteRental);
-
-// UPLOAD RENTAL IMAGES
 router.post('/:id/upload', uploadRentArray, handleMulterError, uploadRentalImages);
-
-// DELETE RENTAL IMAGE
 router.delete('/:id/images/:imageId', deleteRentalImage);
-
-// SET FEATURED IMAGE
 router.put('/:id/featured-image', setFeaturedImage);
-
-// UPDATE RENTAL STATUS
 router.patch('/:id/status', updateRentalStatus);
-
-// TOGGLE FEATURED
 router.patch('/:id/featured', toggleFeatured);
-
 export default router;
