@@ -1,6 +1,6 @@
 // services/rentService.js
 import Rent from '../models/rentModel.js';
-import Amenity from '../models/AmenityModel.js';
+import Amenity from '../models/amenityModel.js';
 import { deleteMultipleFromB2 } from '../config/b2.js';
 
 class RentService {
